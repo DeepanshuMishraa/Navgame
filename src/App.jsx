@@ -21,6 +21,7 @@ const App = () => {
   const [currentInstruction, setCurrentInstruction] = useState('');
   const [routeSteps, setRouteSteps] = useState([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [expectedDirection, setExpectedDirection] = useState(null);
 
   useEffect(() => {
     if (map.current) return; // initialize map only once
@@ -31,10 +32,11 @@ const App = () => {
       zoom: zoom,
     });
 
+    //
     map.current.on('load', () => {
       // Set predefined start and end points in Bhagalpur
       const start = { lng: 87.0139, lat: 25.2425 }; // Bhagalpur Junction railway station
-      const end = { lng: 87.0279, lat: 25.2551 }; // Bhagalpur College of Engineering
+      const end = { lng: 87., lat: 25.2551 }; // Bhagalpur College of Engineering
       setStartPoint(start);
       setEndPoint(end);
 
@@ -95,13 +97,14 @@ const App = () => {
         },
         paint: {
           'line-color': '#3887be',
-          'line-width': 8, // Increased line width
+          'line-width': 20, // Increased line width
           'line-opacity': 0.75,
         },
       });
     }
 
     setCurrentInstruction(data.routes[0].legs[0].steps[0].maneuver.instruction);
+    setExpectedDirection(data.routes[0].legs[0].steps[0].maneuver.modifier);
   };
 
   const speak = (text) => {
@@ -129,7 +132,7 @@ const App = () => {
     const [lng, lat] = playerMarker.current.getLngLat().toArray();
     let newLng = lng;
     let newLat = lat;
-    const moveDistance = 0.0003; // Increased movement distance
+    const moveDistance = 0.0001; // Increased movement distance
 
     switch (e.key) {
       case 'ArrowUp':
@@ -140,9 +143,11 @@ const App = () => {
         break;
       case 'ArrowLeft':
         newLng -= moveDistance;
+        if (expectedDirection !== 'left') setErrors((prev) => prev + 1);
         break;
       case 'ArrowRight':
         newLng += moveDistance;
+        if (expectedDirection !== 'right') setErrors((prev) => prev + 1);
         break;
       default:
         return;
@@ -161,10 +166,7 @@ const App = () => {
       return Math.abs(point[0] - lng) < tolerance && Math.abs(point[1] - lat) < tolerance;
     });
 
-    if (!nearestPoint) {
-      setErrors((prev) => prev + 1);
-      speak('You are off the route');
-    } else {
+    if (nearestPoint) {
       const nextStepIndex = route.findIndex((point) => {
         return Math.abs(point[0] - lng) < tolerance && Math.abs(point[1] - lat) < tolerance;
       });
@@ -188,7 +190,9 @@ const App = () => {
   const updateInstruction = () => {
     if (currentStepIndex < routeSteps.length) {
       const instruction = routeSteps[currentStepIndex].maneuver.instruction;
+      const modifier = routeSteps[currentStepIndex].maneuver.modifier;
       setCurrentInstruction(instruction);
+      setExpectedDirection(modifier);
       speak(instruction);
     }
   };

@@ -22,6 +22,7 @@ const App = () => {
   const [routeSteps, setRouteSteps] = useState([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [expectedDirection, setExpectedDirection] = useState(null);
+  const [lastTurnIndex, setLastTurnIndex] = useState(-1);
 
   useEffect(() => {
     if (map.current) return; // initialize map only once
@@ -32,11 +33,10 @@ const App = () => {
       zoom: zoom,
     });
 
-    //
     map.current.on('load', () => {
       // Set predefined start and end points in Bhagalpur
       const start = { lng: 87.0139, lat: 25.2425 }; // Bhagalpur Junction railway station
-      const end = { lng: 87., lat: 25.2551 }; // Bhagalpur College of Engineering
+      const end = { lng: 87.0339, lat: 25.2625 }; // Adjusted end point for more turns
       setStartPoint(start);
       setEndPoint(end);
 
@@ -97,7 +97,7 @@ const App = () => {
         },
         paint: {
           'line-color': '#3887be',
-          'line-width': 20, // Increased line width
+          'line-width': 12,
           'line-opacity': 0.75,
         },
       });
@@ -117,6 +117,7 @@ const App = () => {
     setTimeTaken(0);
     setErrors(0);
     setCurrentStepIndex(0);
+    setLastTurnIndex(-1);
     speak('Start your journey');
     updateInstruction();
     
@@ -132,7 +133,7 @@ const App = () => {
     const [lng, lat] = playerMarker.current.getLngLat().toArray();
     let newLng = lng;
     let newLat = lat;
-    const moveDistance = 0.0001; // Increased movement distance
+    const moveDistance = 0.0001;
 
     switch (e.key) {
       case 'ArrowUp':
@@ -143,11 +144,11 @@ const App = () => {
         break;
       case 'ArrowLeft':
         newLng -= moveDistance;
-        if (expectedDirection !== 'left') setErrors((prev) => prev + 1);
+        checkTurn('left');
         break;
       case 'ArrowRight':
         newLng += moveDistance;
-        if (expectedDirection !== 'right') setErrors((prev) => prev + 1);
+        checkTurn('right');
         break;
       default:
         return;
@@ -160,8 +161,18 @@ const App = () => {
     map.current.setCenter([newLng, newLat]);
   };
 
+  const checkTurn = (direction) => {
+    if (currentStepIndex > lastTurnIndex && 
+        (expectedDirection === 'left' || expectedDirection === 'right') && 
+        expectedDirection !== direction) {
+      setErrors((prev) => prev + 1);
+      speak('Wrong turn');
+    }
+    setLastTurnIndex(currentStepIndex);
+  };
+
   const checkRouteFollowing = (lng, lat) => {
-    const tolerance = 0.0005; // Increased tolerance for being on route
+    const tolerance = 0.0005;
     const nearestPoint = route.find((point) => {
       return Math.abs(point[0] - lng) < tolerance && Math.abs(point[1] - lat) < tolerance;
     });

@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
+import * as turf from '@turf/turf';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import './App.css';
 
@@ -9,23 +10,20 @@ const App = () => {
   const mapContainer = useRef(null);
   const map = useRef(null);
   const playerMarker = useRef(null);
-  const [lng, setLng] = useState(87.0139); // Bhagalpur longitude
-  const [lat, setLat] = useState(25.2425); // Bhagalpur latitude
+  const [lng, setLng] = useState(87.0139);
+  const [lat, setLat] = useState(25.2425);
   const [zoom, setZoom] = useState(13);
-  const [startPoint, setStartPoint] = useState(null);
-  const [endPoint, setEndPoint] = useState(null);
-  const [route, setRoute] = useState([]);
+  const [route, setRoute] = useState(null);
   const [errors, setErrors] = useState(0);
   const [timeTaken, setTimeTaken] = useState(0);
   const [isStarted, setIsStarted] = useState(false);
   const [currentInstruction, setCurrentInstruction] = useState('');
   const [routeSteps, setRouteSteps] = useState([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [expectedDirection, setExpectedDirection] = useState(null);
-  const [lastTurnIndex, setLastTurnIndex] = useState(-1);
+  const [hasDeviated, setHasDeviated] = useState(false);
 
   useEffect(() => {
-    if (map.current) return; // initialize map only once
+    if (map.current) return;
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/streets-v11',
@@ -34,25 +32,20 @@ const App = () => {
     });
 
     map.current.on('load', () => {
-      // Set predefined start and end points in Bhagalpur
-      const start = { lng: 87.0139, lat: 25.2425 }; // Bhagalpur Junction railway station
-      const end = { lng: 87.0339, lat: 25.2625 }; // Adjusted end point for more turns
-      setStartPoint(start);
-      setEndPoint(end);
+      const start = [87.0139, 25.2425];
+      const end = [87.0339, 25.2625];
 
-      // Add markers to the map
-      new mapboxgl.Marker().setLngLat([start.lng, start.lat]).addTo(map.current);
-      new mapboxgl.Marker({ color: 'red' }).setLngLat([end.lng, end.lat]).addTo(map.current);
-      // Create a custom HTML element for the player marker
+      new mapboxgl.Marker().setLngLat(start).addTo(map.current);
+      new mapboxgl.Marker({ color: 'red' }).setLngLat(end).addTo(map.current);
+
       const el = document.createElement('div');
       el.className = 'player-marker';
       el.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 21V19C20 17.9391 19.5786 16.9217 18.8284 16.1716C18.0783 15.4214 17.0609 15 16 15H8C6.93913 15 5.92172 15.4214 5.17157 16.1716C4.42143 16.9217 4 17.9391 4 19V21M16 7C16 9.20914 14.2091 11 12 11C9.79086 11 8 9.20914 8 7C8 4.79086 9.79086 3 12 3C14.2091 3 16 4.79086 16 7Z" stroke="blue" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
       playerMarker.current = new mapboxgl.Marker(el)
-        .setLngLat([start.lng, start.lat])
+        .setLngLat(start)
         .addTo(map.current);
 
-      // Fetch route from start to end
       fetchRoute(start, end);
     });
   }, []);
@@ -71,147 +64,132 @@ const App = () => {
 
   const fetchRoute = async (start, end) => {
     const response = await fetch(
-      `https://api.mapbox.com/directions/v5/mapbox/walking/${start.lng},${start.lat};${end.lng},${end.lat}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}`
+      `https://api.mapbox.com/directions/v5/mapbox/walking/${start[0]},${start[1]};${end[0]},${end[1]}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}`
     );
     const data = await response.json();
-    const routeCoordinates = data.routes[0].geometry.coordinates;
-    setRoute(routeCoordinates);
-    setRouteSteps(data.routes[0].legs[0].steps);
+    const routeData = data.routes[0];
+    setRoute(routeData.geometry);
+    setRouteSteps(routeData.legs[0].steps);
 
-    const routeGeoJSON = {
-      type: 'Feature',
-      geometry: {
-        type: 'LineString',
-        coordinates: routeCoordinates,
+    map.current.addLayer({
+      id: 'route',
+      type: 'line',
+      source: {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: routeData.geometry
+        }
       },
-    };
+      layout: {
+        'line-join': 'round',
+        'line-cap': 'round'
+      },
+      paint: {
+        'line-color': '#3887be',
+        'line-width': 24,
+        'line-opacity': 0.75
+      }
+    });
 
-    if (map.current.getSource('route')) {
-      map.current.getSource('route').setData(routeGeoJSON);
-    } else {
-      map.current.addLayer({
-        id: 'route',
-        type: 'line',
-        source: {
-          type: 'geojson',
-          data: routeGeoJSON,
-        },
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round',
-        },
-        paint: {
-          'line-color': '#3887be',
-          'line-width': 12,
-          'line-opacity': 0.75,
-        },
-      });
-    }
-
-    setCurrentInstruction(data.routes[0].legs[0].steps[0].maneuver.instruction);
-    setExpectedDirection(data.routes[0].legs[0].steps[0].maneuver.modifier);
+    updateInstruction(0);
   };
 
-  const speak = (text) => {
+  const speak = useCallback((text) => {
+    speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     speechSynthesis.speak(utterance);
-  };
+  }, []);
 
   const handleStart = () => {
     setIsStarted(true);
     setTimeTaken(0);
     setErrors(0);
     setCurrentStepIndex(0);
-    setLastTurnIndex(-1);
+    setHasDeviated(false);
     speak('Start your journey');
-    updateInstruction();
+    updateInstruction(0);
     
-    // Lock the map view
     map.current.dragPan.disable();
     map.current.scrollZoom.disable();
     map.current.keyboard.disable();
   };
 
-  const handleKeyPress = (e) => {
-    if (!isStarted) return;
+  const handleKeyPress = useCallback((e) => {
+    if (!isStarted || !route) return;
 
-    const [lng, lat] = playerMarker.current.getLngLat().toArray();
-    let newLng = lng;
-    let newLat = lat;
+    const currentPosition = playerMarker.current.getLngLat();
+    let newLng = currentPosition.lng;
+    let newLat = currentPosition.lat;
     const moveDistance = 0.0001;
 
     switch (e.key) {
-      case 'ArrowUp':
-        newLat += moveDistance;
-        break;
-      case 'ArrowDown':
-        newLat -= moveDistance;
-        break;
-      case 'ArrowLeft':
-        newLng -= moveDistance;
-        checkTurn('left');
-        break;
-      case 'ArrowRight':
-        newLng += moveDistance;
-        checkTurn('right');
-        break;
-      default:
-        return;
+      case 'ArrowUp': newLat += moveDistance; break;
+      case 'ArrowDown': newLat -= moveDistance; break;
+      case 'ArrowLeft': newLng -= moveDistance; break;
+      case 'ArrowRight': newLng += moveDistance; break;
+      default: return;
     }
 
-    playerMarker.current.setLngLat([newLng, newLat]);
-    checkRouteFollowing(newLng, newLat);
+    const newPosition = [newLng, newLat];
+    playerMarker.current.setLngLat(newPosition);
+    map.current.setCenter(newPosition);
 
-    // Center the map on the player's new position
-    map.current.setCenter([newLng, newLat]);
-  };
+    checkRouteFollowing(newPosition);
+  }, [isStarted, route]);
 
-  const checkTurn = (direction) => {
-    if (currentStepIndex > lastTurnIndex && 
-        (expectedDirection === 'left' || expectedDirection === 'right') && 
-        expectedDirection !== direction) {
+  const checkRouteFollowing = useCallback((position) => {
+    if (!route || !routeSteps.length) return;
+
+    const lineString = turf.lineString(route.coordinates);
+    const point = turf.point(position);
+    
+    // Calculate buffer width in meters based on zoom level
+    const bufferWidthPixels = 24;
+    const metersPerPixel = (40075016.686 * Math.abs(Math.cos(lat * Math.PI / 180))) / Math.pow(2, map.current.getZoom() + 8);
+    const bufferWidthMeters = bufferWidthPixels * metersPerPixel;
+
+    const buffer = turf.buffer(lineString, bufferWidthMeters, { units: 'meters' });
+    const isInRouteBuffer = turf.booleanPointInPolygon(point, buffer);
+
+    if (!isInRouteBuffer && !hasDeviated) {
       setErrors((prev) => prev + 1);
-      speak('Wrong turn');
-    }
-    setLastTurnIndex(currentStepIndex);
-  };
-
-  const checkRouteFollowing = (lng, lat) => {
-    const tolerance = 0.0005;
-    const nearestPoint = route.find((point) => {
-      return Math.abs(point[0] - lng) < tolerance && Math.abs(point[1] - lat) < tolerance;
-    });
-
-    if (nearestPoint) {
-      const nextStepIndex = route.findIndex((point) => {
-        return Math.abs(point[0] - lng) < tolerance && Math.abs(point[1] - lat) < tolerance;
-      });
-      if (nextStepIndex !== -1 && nextStepIndex > currentStepIndex) {
-        setCurrentStepIndex(nextStepIndex);
-        updateInstruction();
-      }
+      speak("You're off route. Please return to the designated path.");
+      setHasDeviated(true);
+    } else if (isInRouteBuffer && hasDeviated) {
+      setHasDeviated(false);
+      updateInstruction(currentStepIndex);
     }
 
-    if (Math.abs(lng - endPoint.lng) < tolerance && Math.abs(lat - endPoint.lat) < tolerance) {
+    const snapped = turf.nearestPointOnLine(lineString, point);
+    const routeDistance = turf.length(lineString);
+    const progress = snapped.properties.location / routeDistance;
+    const nextStepIndex = routeSteps.findIndex(
+      (step) => step.distance / routeDistance > progress
+    );
+
+    if (nextStepIndex !== -1 && nextStepIndex !== currentStepIndex) {
+      updateInstruction(nextStepIndex);
+    }
+
+    if (progress > 0.99) { // If within 1% of route completion
       setIsStarted(false);
       speak(`You have reached your destination in ${timeTaken} seconds with ${errors} errors.`);
-      
-      // Unlock the map view
       map.current.dragPan.enable();
       map.current.scrollZoom.enable();
       map.current.keyboard.enable();
     }
-  };
+  }, [route, routeSteps, currentStepIndex, timeTaken, errors, speak, hasDeviated, lat]);
 
-  const updateInstruction = () => {
-    if (currentStepIndex < routeSteps.length) {
-      const instruction = routeSteps[currentStepIndex].maneuver.instruction;
-      const modifier = routeSteps[currentStepIndex].maneuver.modifier;
+  const updateInstruction = useCallback((index) => {
+    if (index < routeSteps.length) {
+      const instruction = routeSteps[index].maneuver.instruction;
+      setCurrentStepIndex(index);
       setCurrentInstruction(instruction);
-      setExpectedDirection(modifier);
       speak(instruction);
     }
-  };
+  }, [routeSteps, speak]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyPress);
@@ -231,9 +209,13 @@ const App = () => {
           <button onClick={handleStart}>Start</button>
         </div>
         <div>
-          <p>Errors: {errors}</p>
-          <p>Time Taken: {timeTaken} seconds</p>
-          <p>Instruction: {currentInstruction}</p>
+          Current Instruction: {currentInstruction}
+        </div>
+        <div>
+          Errors: {errors}
+        </div>
+        <div>
+          Time Taken: {timeTaken} seconds
         </div>
       </div>
     </div>

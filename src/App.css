@@ -1,28 +1,64 @@
-.navigation-task {
-  position: relative;
-  width: 100%;
+.app-container {
+  display: flex;
   height: 100vh;
 }
 
 .map-container {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  flex: 1;
 }
 
 .sidebar {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  padding: 10px;
-  background-color: rgba(255, 255, 255, 0.8);
-  border-radius: 4px;
-  z-index: 1;
+  width: 300px;
+  padding: 20px;
+  background-color: #f0f0f0;
+  overflow-y: auto;
 }
 
-.sidebar button,
-.sidebar select {
-  margin-right: 10px;
+.sidebar h2 {
+  margin-top: 0;
+}
+
+.sidebar button {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 20px;
+}
+
+.stat {
+  margin-bottom: 10px;
+}
+
+.instructions {
+  margin-top: 20px;
+}
+
+.instruction {
+  margin-bottom: 5px;
+  padding: 5px;
+  background-color: #e0e0e0;
+}
+
+.instruction.completed {
+  background-color: #90EE90;
+}
+
+.instruction.current {
+  font-weight: bold;
+  border: 1px solid #000;
+}
+
+.controls {
+  margin-top: 20px;
+  font-style: italic;
+}
+
+.game-result {
+  margin-top: 20px;
+  padding: 10px;
+  background-color: #e0e0e0;
+  border-radius: 5px;
+}
+
+.game-result h3 {
+  margin-top: 0;
 }

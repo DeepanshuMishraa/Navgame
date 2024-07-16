@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
-import * as turf from '@turf/turf';
+import MapboxDirections from '@mapbox/mapbox-gl-directions/dist/mapbox-gl-directions';
+import '@mapbox/mapbox-gl-directions/dist/mapbox-gl-directions.css';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import './App.css';
+import * as turf from '@turf/turf';
 
 mapboxgl.accessToken = 'pk.eyJ1IjoidGVzdHVzcnIiLCJhIjoiY2x3ejhiaHcxMDRtZzJpc2VtaXFpc3lpeCJ9.8TIx8H5Jdc8-QOtaR9fH_Q';
 
@@ -10,33 +12,26 @@ const App = () => {
   const mapContainer = useRef(null);
   const map = useRef(null);
   const playerMarker = useRef(null);
-  const [lng, setLng] = useState(87.0139);
-  const [lat, setLat] = useState(25.2425);
-  const [zoom, setZoom] = useState(13);
-  const [route, setRoute] = useState(null);
   const [errors, setErrors] = useState(0);
   const [timeTaken, setTimeTaken] = useState(0);
   const [isStarted, setIsStarted] = useState(false);
-  const [currentInstruction, setCurrentInstruction] = useState('');
-  const [routeSteps, setRouteSteps] = useState([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [hasDeviated, setHasDeviated] = useState(false);
+  const [startTime, setStartTime] = useState(null);
+  const directions = useRef(null);
+  const [steps, setSteps] = useState([]);
+  const destination = useRef([87.0339, 25.2625]);
 
   useEffect(() => {
     if (map.current) return;
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/streets-v11',
-      center: [lng, lat],
-      zoom: zoom,
+      center: [87.0023, 25.2561],
+      zoom: 13,
     });
 
     map.current.on('load', () => {
-      const start = [87.0139, 25.2425];
-      const end = [87.0339, 25.2625];
-
-      new mapboxgl.Marker().setLngLat(start).addTo(map.current);
-      new mapboxgl.Marker({ color: 'red' }).setLngLat(end).addTo(map.current);
+      const start = [87.0023, 25.2561]; // Tapashwi Hospital, Bhagalpur
 
       const el = document.createElement('div');
       el.className = 'player-marker';
@@ -46,7 +41,21 @@ const App = () => {
         .setLngLat(start)
         .addTo(map.current);
 
-      fetchRoute(start, end);
+      directions.current = new MapboxDirections({
+        accessToken: mapboxgl.accessToken,
+        unit: 'metric',
+        profile: 'mapbox/walking',
+        interactive: false
+      });
+
+      map.current.addControl(directions.current, 'top-left');
+      directions.current.setOrigin(start);
+      directions.current.setDestination(destination.current);
+
+      directions.current.on('route', (e) => {
+        const newSteps = e.route[0].legs[0].steps;
+        setSteps(newSteps.map((step, index) => ({ ...step, completed: false, id: index })));
+      });
     });
   }, []);
 
@@ -62,40 +71,6 @@ const App = () => {
     return () => clearInterval(interval);
   }, [isStarted, timeTaken]);
 
-  const fetchRoute = async (start, end) => {
-    const response = await fetch(
-      `https://api.mapbox.com/directions/v5/mapbox/walking/${start[0]},${start[1]};${end[0]},${end[1]}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}`
-    );
-    const data = await response.json();
-    const routeData = data.routes[0];
-    setRoute(routeData.geometry);
-    setRouteSteps(routeData.legs[0].steps);
-
-    map.current.addLayer({
-      id: 'route',
-      type: 'line',
-      source: {
-        type: 'geojson',
-        data: {
-          type: 'Feature',
-          properties: {},
-          geometry: routeData.geometry
-        }
-      },
-      layout: {
-        'line-join': 'round',
-        'line-cap': 'round'
-      },
-      paint: {
-        'line-color': '#3887be',
-        'line-width': 24,
-        'line-opacity': 0.75
-      }
-    });
-
-    updateInstruction(0);
-  };
-
   const speak = useCallback((text) => {
     speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
@@ -107,17 +82,16 @@ const App = () => {
     setTimeTaken(0);
     setErrors(0);
     setCurrentStepIndex(0);
-    setHasDeviated(false);
+    setStartTime(Date.now());
     speak('Start your journey');
-    updateInstruction(0);
-    
+
     map.current.dragPan.disable();
     map.current.scrollZoom.disable();
     map.current.keyboard.disable();
   };
 
   const handleKeyPress = useCallback((e) => {
-    if (!isStarted || !route) return;
+    if (!isStarted) return;
 
     const currentPosition = playerMarker.current.getLngLat();
     let newLng = currentPosition.lng;
@@ -136,60 +110,68 @@ const App = () => {
     playerMarker.current.setLngLat(newPosition);
     map.current.setCenter(newPosition);
 
-    checkRouteFollowing(newPosition);
-  }, [isStarted, route]);
+    checkStepCompletion(newPosition);
+  }, [isStarted]);
 
-  const checkRouteFollowing = useCallback((position) => {
-    if (!route || !routeSteps.length) return;
+  const checkStepCompletion = useCallback((position) => {
+    if (currentStepIndex >= steps.length) return;
 
-    const lineString = turf.lineString(route.coordinates);
-    const point = turf.point(position);
-    
-    // Calculate buffer width in meters based on zoom level
-    const bufferWidthPixels = 24;
-    const metersPerPixel = (40075016.686 * Math.abs(Math.cos(lat * Math.PI / 180))) / Math.pow(2, map.current.getZoom() + 8);
-    const bufferWidthMeters = bufferWidthPixels * metersPerPixel;
+    const currentStep = steps[currentStepIndex];
+    const stepEndPoint = currentStep.maneuver.location;
 
-    const buffer = turf.buffer(lineString, bufferWidthMeters, { units: 'meters' });
-    const isInRouteBuffer = turf.booleanPointInPolygon(point, buffer);
-
-    if (!isInRouteBuffer && !hasDeviated) {
-      setErrors((prev) => prev + 1);
-      speak("You're off route. Please return to the designated path.");
-      setHasDeviated(true);
-    } else if (isInRouteBuffer && hasDeviated) {
-      setHasDeviated(false);
-      updateInstruction(currentStepIndex);
-    }
-
-    const snapped = turf.nearestPointOnLine(lineString, point);
-    const routeDistance = turf.length(lineString);
-    const progress = snapped.properties.location / routeDistance;
-    const nextStepIndex = routeSteps.findIndex(
-      (step) => step.distance / routeDistance > progress
+    const distance = Math.sqrt(
+      Math.pow(stepEndPoint[0] - position[0], 2) + Math.pow(stepEndPoint[1] - position[1], 2)
     );
 
-    if (nextStepIndex !== -1 && nextStepIndex !== currentStepIndex) {
-      updateInstruction(nextStepIndex);
+    if (distance < 0.0002) { // Player has reached the end of the current step
+      setSteps(prevSteps => prevSteps.map((step, index) => 
+        index === currentStepIndex ? { ...step, completed: true } : step
+      ));
+      setCurrentStepIndex(prevIndex => prevIndex + 1);
+      if (currentStepIndex + 1 < steps.length) {
+        speak(steps[currentStepIndex + 1].maneuver.instruction);
+      }
+    } else {
+      // Check if player is following the current instruction
+      const bearingToNextPoint = turf.bearing(
+        turf.point([position[0], position[1]]),
+        turf.point(stepEndPoint)
+      );
+      const playerBearing = map.current.getBearing();
+      const bearingDiff = Math.abs(bearingToNextPoint - playerBearing);
+      
+      if (bearingDiff > 45 && bearingDiff < 315) { // Player is not following the instruction
+        setErrors(prevErrors => prevErrors + 1);
+        speak("You're not following the instruction. Please correct your course.");
+      }
     }
 
-    if (progress > 0.99) { // If within 1% of route completion
+    // Check if player has reached the final destination
+    if (currentStepIndex === steps.length - 1 && distance < 0.0002) {
       setIsStarted(false);
-      speak(`You have reached your destination in ${timeTaken} seconds with ${errors} errors.`);
+      const totalTime = Math.floor((Date.now() - startTime) / 1000);
+      speak(`You have reached your destination in ${totalTime} seconds with ${errors} errors.`);
+      setTimeTaken(totalTime);
       map.current.dragPan.enable();
       map.current.scrollZoom.enable();
       map.current.keyboard.enable();
+    } else {
+      // Fetch new route and instructions from Mapbox Directions API
+      fetchNewRoute(position);
     }
-  }, [route, routeSteps, currentStepIndex, timeTaken, errors, speak, hasDeviated, lat]);
+  }, [currentStepIndex, steps, errors, startTime, speak]);
 
-  const updateInstruction = useCallback((index) => {
-    if (index < routeSteps.length) {
-      const instruction = routeSteps[index].maneuver.instruction;
-      setCurrentStepIndex(index);
-      setCurrentInstruction(instruction);
-      speak(instruction);
+  const fetchNewRoute = useCallback(async (position) => {
+    const response = await fetch(
+      `https://api.mapbox.com/directions/v5/mapbox/walking/${position[0]},${position[1]};${destination.current[0]},${destination.current[1]}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}`
+    );
+    const data = await response.json();
+    const newSteps = data.routes[0].legs[0].steps;
+    setSteps(newSteps.map((step, index) => ({ ...step, completed: false, id: index })));
+    if (newSteps.length > 0) {
+      speak(newSteps[0].maneuver.instruction);
     }
-  }, [routeSteps, speak]);
+  }, [speak]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyPress);
@@ -199,23 +181,32 @@ const App = () => {
   }, [handleKeyPress]);
 
   return (
-    <div>
+    <div className="app-container">
       <div ref={mapContainer} className="map-container" />
       <div className="sidebar">
-        <div>
-          Longitude: {lng.toFixed(4)} | Latitude: {lat.toFixed(4)} | Zoom: {zoom.toFixed(2)}
+        <h2>Navigation Game</h2>
+        <button onClick={handleStart} disabled={isStarted}>
+          {isStarted ? 'Game in Progress' : 'Start Game'}
+        </button>
+        <div className="stat">
+          <strong>Time Taken:</strong> {timeTaken} seconds
         </div>
-        <div>
-          <button onClick={handleStart}>Start</button>
+        <div className="stat">
+          <strong>Errors:</strong> {errors}
         </div>
-        <div>
-          Current Instruction: {currentInstruction}
+        <div className="instructions">
+          <strong>Instructions:</strong>
+          {steps.map((step, index) => (
+            <div 
+              key={step.id} 
+              className={`instruction ${step.completed ? 'completed' : ''} ${index === currentStepIndex ? 'current' : ''}`}
+            >
+              {step.maneuver.instruction}
+            </div>
+          ))}
         </div>
-        <div>
-          Errors: {errors}
-        </div>
-        <div>
-          Time Taken: {timeTaken} seconds
+        <div className="controls">
+          <p>Use arrow keys to move the player</p>
         </div>
       </div>
     </div>

@@ -15,11 +15,15 @@ const App = () => {
   const [errors, setErrors] = useState(0);
   const [timeTaken, setTimeTaken] = useState(0);
   const [isStarted, setIsStarted] = useState(false);
+  const [isGameActive, setIsGameActive] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [startTime, setStartTime] = useState(null);
   const directions = useRef(null);
   const [steps, setSteps] = useState([]);
   const destination = useRef([87.0339, 25.2625]);
+  const [speechQueue, setSpeechQueue] = useState([]);
+  const isSpeaking = useRef(false);
+  const lastInstruction = useRef('');
 
   useEffect(() => {
     if (map.current) return;
@@ -72,12 +76,44 @@ const App = () => {
   }, [isStarted, timeTaken]);
 
   const speak = useCallback((text) => {
-    speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    speechSynthesis.speak(utterance);
+    if (text !== lastInstruction.current) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.onend = () => {
+        isSpeaking.current = false;
+        setSpeechQueue(prevQueue => prevQueue.slice(1));
+      };
+      window.speechSynthesis.speak(utterance);
+      isSpeaking.current = true;
+    }
+    lastInstruction.current = text;
   }, []);
+  
 
-  const handleStart = () => {
+  useEffect(() => {
+    const speakFromQueue = () => {
+      if (speechQueue.length > 0 && !isSpeaking.current) {
+        isSpeaking.current = true;
+        const utterance = new SpeechSynthesisUtterance(speechQueue[0]);
+        utterance.onend = () => {
+          isSpeaking.current = false;
+          setSpeechQueue(prevQueue => prevQueue.slice(1));
+        };
+        speechSynthesis.speak(utterance);
+      }
+    };
+
+    speakFromQueue();
+  }, [speechQueue]);
+
+  const handleStartStop = () => {
+    if (isGameActive) {
+      endGame();
+    } else {
+      startGame();
+    }
+  };
+
+  const startGame = () => {
     setIsStarted(true);
     setTimeTaken(0);
     setErrors(0);
@@ -88,7 +124,33 @@ const App = () => {
     map.current.dragPan.disable();
     map.current.scrollZoom.disable();
     map.current.keyboard.disable();
+
+    setIsGameActive(true);
   };
+
+  const endGame = useCallback(() => {
+    setIsStarted(false);
+    const totalTime = Math.floor((Date.now() - startTime) / 1000);
+  
+    // Clear speech queue and stop any ongoing speech
+    window.speechSynthesis.cancel();
+    setSpeechQueue([]);
+  
+    // Prepare the final message
+    const finalMessage = `You have reached your destination in ${totalTime} seconds with ${errors} errors.`;
+  
+    // Speak the final message
+    speak(finalMessage);
+  
+    setTimeTaken(totalTime);
+    setIsGameActive(false);
+  
+    map.current.dragPan.enable();
+    map.current.scrollZoom.enable();
+    map.current.keyboard.enable();
+    window.removeEventListener('keydown', handleKeyPress);
+  }, [startTime, errors, speak]);
+  
 
   const handleKeyPress = useCallback((e) => {
     if (!isStarted) return;
@@ -119,11 +181,13 @@ const App = () => {
     const currentStep = steps[currentStepIndex];
     const stepEndPoint = currentStep.maneuver.location;
 
-    const distance = Math.sqrt(
-      Math.pow(stepEndPoint[0] - position[0], 2) + Math.pow(stepEndPoint[1] - position[1], 2)
+    const distance = turf.distance(
+      turf.point(position),
+      turf.point(stepEndPoint),
+      { units: 'meters' }
     );
 
-    if (distance < 0.0002) { // Player has reached the end of the current step
+    if (distance < 10) {
       setSteps(prevSteps => prevSteps.map((step, index) => 
         index === currentStepIndex ? { ...step, completed: true } : step
       ));
@@ -132,34 +196,27 @@ const App = () => {
         speak(steps[currentStepIndex + 1].maneuver.instruction);
       }
     } else {
-      // Check if player is following the current instruction
-      const bearingToNextPoint = turf.bearing(
-        turf.point([position[0], position[1]]),
-        turf.point(stepEndPoint)
-      );
-      const playerBearing = map.current.getBearing();
-      const bearingDiff = Math.abs(bearingToNextPoint - playerBearing);
-      
-      if (bearingDiff > 45 && bearingDiff < 315) { // Player is not following the instruction
-        setErrors(prevErrors => prevErrors + 1);
-        speak("You're not following the instruction. Please correct your course.");
+      if (currentStep.maneuver.type.includes('turn')) {
+        const bearingToNextPoint = turf.bearing(
+          turf.point(position),
+          turf.point(stepEndPoint)
+        );
+        const playerBearing = map.current.getBearing();
+        const bearingDiff = Math.abs(bearingToNextPoint - playerBearing);
+        
+        if (bearingDiff > 45 && bearingDiff < 315) {
+          setErrors(prevErrors => prevErrors + 1);
+          speak("You missed the turn. Please correct your course.");
+        }
       }
     }
 
-    // Check if player has reached the final destination
-    if (currentStepIndex === steps.length - 1 && distance < 0.0002) {
-      setIsStarted(false);
-      const totalTime = Math.floor((Date.now() - startTime) / 1000);
-      speak(`You have reached your destination in ${totalTime} seconds with ${errors} errors.`);
-      setTimeTaken(totalTime);
-      map.current.dragPan.enable();
-      map.current.scrollZoom.enable();
-      map.current.keyboard.enable();
+    if (currentStepIndex === steps.length - 1 && distance < 10) {
+      endGame();
     } else {
-      // Fetch new route and instructions from Mapbox Directions API
       fetchNewRoute(position);
     }
-  }, [currentStepIndex, steps, errors, startTime, speak]);
+  }, [currentStepIndex, steps, speak]);
 
   const fetchNewRoute = useCallback(async (position) => {
     const response = await fetch(
@@ -168,7 +225,7 @@ const App = () => {
     const data = await response.json();
     const newSteps = data.routes[0].legs[0].steps;
     setSteps(newSteps.map((step, index) => ({ ...step, completed: false, id: index })));
-    if (newSteps.length > 0) {
+    if (newSteps.length > 0 && newSteps[0].maneuver.instruction !== lastInstruction.current) {
       speak(newSteps[0].maneuver.instruction);
     }
   }, [speak]);
@@ -185,8 +242,8 @@ const App = () => {
       <div ref={mapContainer} className="map-container" />
       <div className="sidebar">
         <h2>Navigation Game</h2>
-        <button onClick={handleStart} disabled={isStarted}>
-          {isStarted ? 'Game in Progress' : 'Start Game'}
+        <button onClick={handleStartStop}>
+          {isGameActive ? 'Stop Game' : 'Start Game'}
         </button>
         <div className="stat">
           <strong>Time Taken:</strong> {timeTaken} seconds

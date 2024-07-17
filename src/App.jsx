@@ -21,9 +21,8 @@ const App = () => {
   const directions = useRef(null);
   const [steps, setSteps] = useState([]);
   const destination = useRef([87.0339, 25.2625]);
-  const [speechQueue, setSpeechQueue] = useState([]);
-  const isSpeaking = useRef(false);
   const lastInstruction = useRef('');
+  const lastErrorTime = useRef(0);
 
   useEffect(() => {
     if (map.current) return;
@@ -31,7 +30,7 @@ const App = () => {
       container: mapContainer.current,
       style: 'mapbox://styles/mapbox/streets-v11',
       center: [87.0023, 25.2561],
-      zoom: 13,
+      zoom: 15,
     });
 
     map.current.on('load', () => {
@@ -59,6 +58,9 @@ const App = () => {
       directions.current.on('route', (e) => {
         const newSteps = e.route[0].legs[0].steps;
         setSteps(newSteps.map((step, index) => ({ ...step, completed: false, id: index })));
+        if (newSteps.length > 0) {
+          speak(newSteps[0].maneuver.instruction);
+        }
       });
     });
   }, []);
@@ -78,32 +80,10 @@ const App = () => {
   const speak = useCallback((text) => {
     if (text !== lastInstruction.current) {
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.onend = () => {
-        isSpeaking.current = false;
-        setSpeechQueue(prevQueue => prevQueue.slice(1));
-      };
       window.speechSynthesis.speak(utterance);
-      isSpeaking.current = true;
+      lastInstruction.current = text;
     }
-    lastInstruction.current = text;
   }, []);
-  
-
-  useEffect(() => {
-    const speakFromQueue = () => {
-      if (speechQueue.length > 0 && !isSpeaking.current) {
-        isSpeaking.current = true;
-        const utterance = new SpeechSynthesisUtterance(speechQueue[0]);
-        utterance.onend = () => {
-          isSpeaking.current = false;
-          setSpeechQueue(prevQueue => prevQueue.slice(1));
-        };
-        speechSynthesis.speak(utterance);
-      }
-    };
-
-    speakFromQueue();
-  }, [speechQueue]);
 
   const handleStartStop = () => {
     if (isGameActive) {
@@ -132,14 +112,9 @@ const App = () => {
     setIsStarted(false);
     const totalTime = Math.floor((Date.now() - startTime) / 1000);
   
-    // Clear speech queue and stop any ongoing speech
     window.speechSynthesis.cancel();
-    setSpeechQueue([]);
   
-    // Prepare the final message
     const finalMessage = `You have reached your destination in ${totalTime} seconds with ${errors} errors.`;
-  
-    // Speak the final message
     speak(finalMessage);
   
     setTimeTaken(totalTime);
@@ -148,9 +123,7 @@ const App = () => {
     map.current.dragPan.enable();
     map.current.scrollZoom.enable();
     map.current.keyboard.enable();
-    window.removeEventListener('keydown', handleKeyPress);
   }, [startTime, errors, speak]);
-  
 
   const handleKeyPress = useCallback((e) => {
     if (!isStarted) return;
@@ -196,19 +169,7 @@ const App = () => {
         speak(steps[currentStepIndex + 1].maneuver.instruction);
       }
     } else {
-      if (currentStep.maneuver.type.includes('turn')) {
-        const bearingToNextPoint = turf.bearing(
-          turf.point(position),
-          turf.point(stepEndPoint)
-        );
-        const playerBearing = map.current.getBearing();
-        const bearingDiff = Math.abs(bearingToNextPoint - playerBearing);
-        
-        if (bearingDiff > 45 && bearingDiff < 315) {
-          setErrors(prevErrors => prevErrors + 1);
-          speak("You missed the turn. Please correct your course.");
-        }
-      }
+      checkForErrors(position, currentStep);
     }
 
     if (currentStepIndex === steps.length - 1 && distance < 10) {
@@ -216,7 +177,38 @@ const App = () => {
     } else {
       fetchNewRoute(position);
     }
-  }, [currentStepIndex, steps, speak]);
+  }, [currentStepIndex, steps, speak, endGame]);
+
+  const checkForErrors = useCallback((position, currentStep) => {
+    const now = Date.now();
+    if (now - lastErrorTime.current < 5000) return; // Prevent error spamming
+
+    const stepStartPoint = [playerMarker.current.getLngLat().lng, playerMarker.current.getLngLat().lat];
+    const stepEndPoint = currentStep.maneuver.location;
+
+    // Calculate expected bearing
+    const expectedBearing = turf.bearing(
+      turf.point(stepStartPoint),
+      turf.point(stepEndPoint)
+    );
+
+    // Calculate actual bearing
+    const actualBearing = turf.bearing(
+      turf.point(stepStartPoint),
+      turf.point(position)
+    );
+
+    // Calculate bearing difference
+    let bearingDiff = Math.abs(expectedBearing - actualBearing);
+    if (bearingDiff > 180) bearingDiff = 360 - bearingDiff;
+
+    // Check if the user has deviated significantly from the expected path
+    if (bearingDiff > 45) {
+      setErrors(prevErrors => prevErrors + 1);
+      speak("You've deviated from the correct path. Please correct your course.");
+      lastErrorTime.current = now;
+    }
+  }, [speak]);
 
   const fetchNewRoute = useCallback(async (position) => {
     const response = await fetch(

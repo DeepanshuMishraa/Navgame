@@ -23,6 +23,7 @@ const App = () => {
   const destination = useRef([87.0339, 25.2625]);
   const lastInstruction = useRef('');
   const lastErrorTime = useRef(0);
+  const bufferLine = useRef(null);
 
   useEffect(() => {
     if (map.current) return;
@@ -34,7 +35,7 @@ const App = () => {
     });
 
     map.current.on('load', () => {
-      const start = [87.0023, 25.2561]; // Tapashwi Hospital, Bhagalpur
+      const start = [87.00158,25.24429]; // Tapashwi Hospital, Bhagalpur
 
       const el = document.createElement('div');
       el.className = 'player-marker';
@@ -61,15 +62,47 @@ const App = () => {
         if (newSteps.length > 0) {
           speak(newSteps[0].maneuver.instruction);
         }
+        createBufferLine(e.route[0].geometry.coordinates);
       });
     });
   }, []);
+
+  const createBufferLine = (coordinates) => {
+    if (bufferLine.current) {
+      map.current.removeLayer('buffer-line');
+      map.current.removeSource('buffer-line');
+    }
+  
+    const route = turf.lineString(coordinates);
+    const buffered = turf.buffer(route, 0.06, { units: 'kilometers' }); // 0.06 km = 60 meters
+  
+    bufferLine.current = buffered;
+  
+    map.current.addSource('buffer-line', {
+      type: 'geojson',
+      data: bufferLine.current
+    });
+  
+    map.current.addLayer({
+      id: 'buffer-line',
+      type: 'fill', // Changed from 'line' to 'fill' for buffer
+      source: 'buffer-line',
+      layout: {},
+      paint: {
+        'fill-color': '#888',
+        'fill-opacity': 0.5
+      }
+    });
+  };
+  
 
   useEffect(() => {
     let interval = null;
     if (isStarted) {
       interval = setInterval(() => {
         setTimeTaken((prev) => prev + 1);
+        const position = playerMarker.current.getLngLat();
+        checkForErrors(position);
       }, 1000);
     } else if (!isStarted && timeTaken !== 0) {
       clearInterval(interval);
@@ -141,11 +174,12 @@ const App = () => {
       default: return;
     }
 
-    const newPosition = [newLng, newLat];
+    const newPosition = { lng: newLng, lat: newLat };
     playerMarker.current.setLngLat(newPosition);
     map.current.setCenter(newPosition);
 
     checkStepCompletion(newPosition);
+    checkForErrors(newPosition);
   }, [isStarted]);
 
   const checkStepCompletion = useCallback((position) => {
@@ -155,7 +189,7 @@ const App = () => {
     const stepEndPoint = currentStep.maneuver.location;
 
     const distance = turf.distance(
-      turf.point(position),
+      turf.point([position.lng, position.lat]),
       turf.point(stepEndPoint),
       { units: 'meters' }
     );
@@ -168,8 +202,6 @@ const App = () => {
       if (currentStepIndex + 1 < steps.length) {
         speak(steps[currentStepIndex + 1].maneuver.instruction);
       }
-    } else {
-      checkForErrors(position, currentStep);
     }
 
     if (currentStepIndex === steps.length - 1 && distance < 10) {
@@ -179,40 +211,26 @@ const App = () => {
     }
   }, [currentStepIndex, steps, speak, endGame]);
 
-  const checkForErrors = useCallback((position, currentStep) => {
+  const checkForErrors = useCallback((position) => {
     const now = Date.now();
     if (now - lastErrorTime.current < 5000) return; // Prevent error spamming
-
-    const stepStartPoint = [playerMarker.current.getLngLat().lng, playerMarker.current.getLngLat().lat];
-    const stepEndPoint = currentStep.maneuver.location;
-
-    // Calculate expected bearing
-    const expectedBearing = turf.bearing(
-      turf.point(stepStartPoint),
-      turf.point(stepEndPoint)
-    );
-
-    // Calculate actual bearing
-    const actualBearing = turf.bearing(
-      turf.point(stepStartPoint),
-      turf.point(position)
-    );
-
-    // Calculate bearing difference
-    let bearingDiff = Math.abs(expectedBearing - actualBearing);
-    if (bearingDiff > 180) bearingDiff = 360 - bearingDiff;
-
-    // Check if the user has deviated significantly from the expected path
-    if (bearingDiff > 45) {
-      setErrors(prevErrors => prevErrors + 1);
-      speak("You've deviated from the correct path. Please correct your course.");
-      lastErrorTime.current = now;
+  
+    if (bufferLine.current) {
+      const point = turf.point([position.lng, position.lat]);
+      const isInsideBuffer = turf.booleanPointInPolygon(point, bufferLine.current);
+  
+      if (!isInsideBuffer) {  // If player is outside the buffer
+        setErrors(prevErrors => prevErrors + 1);
+        speak("You've deviated from the correct path. Please correct your course.");
+        lastErrorTime.current = now;
+      }
     }
   }, [speak]);
+  
 
   const fetchNewRoute = useCallback(async (position) => {
     const response = await fetch(
-      `https://api.mapbox.com/directions/v5/mapbox/walking/${position[0]},${position[1]};${destination.current[0]},${destination.current[1]}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}`
+      `https://api.mapbox.com/directions/v5/mapbox/walking/${position.lng},${position.lat};${destination.current[0]},${destination.current[1]}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}`
     );
     const data = await response.json();
     const newSteps = data.routes[0].legs[0].steps;
@@ -220,6 +238,7 @@ const App = () => {
     if (newSteps.length > 0 && newSteps[0].maneuver.instruction !== lastInstruction.current) {
       speak(newSteps[0].maneuver.instruction);
     }
+    createBufferLine(data.routes[0].geometry.coordinates);
   }, [speak]);
 
   useEffect(() => {
@@ -233,7 +252,7 @@ const App = () => {
     <div className="app-container">
       <div ref={mapContainer} className="map-container" />
       <div className="sidebar">
-        <h2>Navigation Game</h2>
+        <h2>WayFinding Methods Game</h2>
         <button onClick={handleStartStop}>
           {isGameActive ? 'Stop Game' : 'Start Game'}
         </button>

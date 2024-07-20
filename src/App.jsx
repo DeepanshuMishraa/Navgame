@@ -3,8 +3,10 @@ import mapboxgl from 'mapbox-gl';
 import MapboxDirections from '@mapbox/mapbox-gl-directions/dist/mapbox-gl-directions';
 import '@mapbox/mapbox-gl-directions/dist/mapbox-gl-directions.css';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import { createRoot } from 'react-dom/client';
 import './App.css';
 import * as turf from '@turf/turf';
+import { Navigation2 } from 'lucide-react';
 
 mapboxgl.accessToken = 'pk.eyJ1IjoidGVzdHVzcnIiLCJhIjoiY2x3ejhiaHcxMDRtZzJpc2VtaXFpc3lpeCJ9.8TIx8H5Jdc8-QOtaR9fH_Q';
 
@@ -39,7 +41,10 @@ const App = () => {
 
       const el = document.createElement('div');
       el.className = 'player-marker';
-      el.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 21V19C20 17.9391 19.5786 16.9217 18.8284 16.1716C18.0783 15.4214 17.0609 15 16 15H8C6.93913 15 5.92172 15.4214 5.17157 16.1716C4.42143 16.9217 4 17.9391 4 19V21M16 7C16 9.20914 14.2091 11 12 11C9.79086 11 8 9.20914 8 7C8 4.79086 9.79086 3 12 3C14.2091 3 16 4.79086 16 7Z" stroke="blue" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+      // Create root and render the Navigation icon
+      const root = createRoot(el);
+      root.render(<Navigation2 size={20} color='blue' />);
 
       playerMarker.current = new mapboxgl.Marker(el)
         .setLngLat(start)
@@ -85,7 +90,7 @@ const App = () => {
   
     map.current.addLayer({
       id: 'buffer-line',
-      type: 'fill', // Changed from 'line' to 'fill' for buffer
+      type: 'fill',
       source: 'buffer-line',
       layout: {},
       paint: {
@@ -94,7 +99,6 @@ const App = () => {
       }
     });
   };
-  
 
   useEffect(() => {
     let interval = null;
@@ -118,10 +122,8 @@ const App = () => {
     }
   }, []);
 
-  const handleStartStop = () => {
-    if (isGameActive) {
-      endGame();
-    } else {
+  const handleStart = () => {
+    if (!isGameActive) {
       startGame();
     }
   };
@@ -144,19 +146,23 @@ const App = () => {
   const endGame = useCallback(() => {
     setIsStarted(false);
     const totalTime = Math.floor((Date.now() - startTime) / 1000);
-  
+
     window.speechSynthesis.cancel();
-  
-    const finalMessage = `You have reached your destination in ${totalTime} seconds with ${errors} errors.`;
-    speak(finalMessage);
-  
+
     setTimeTaken(totalTime);
     setIsGameActive(false);
-  
+
     map.current.dragPan.enable();
     map.current.scrollZoom.enable();
     map.current.keyboard.enable();
-  }, [startTime, errors, speak]);
+
+    // Use a callback with setErrors to get the latest error count
+    setErrors(currentErrors => {
+      const finalMessage = `You have reached your destination in ${totalTime} seconds with ${currentErrors} errors.`;
+      speak(finalMessage);
+      return currentErrors; // This doesn't change the error count, just returns the current value
+    });
+  }, [startTime, speak]);
 
   const handleKeyPress = useCallback((e) => {
     if (!isStarted) return;
@@ -204,7 +210,13 @@ const App = () => {
       }
     }
 
-    if (currentStepIndex === steps.length - 1 && distance < 10) {
+    const distanceToDestination = turf.distance(
+      turf.point([position.lng, position.lat]),
+      turf.point(destination.current),
+      { units: 'meters' }
+    );
+
+    if (distanceToDestination < 20) {
       endGame();
     } else {
       fetchNewRoute(position);
@@ -226,7 +238,6 @@ const App = () => {
       }
     }
   }, [speak]);
-  
 
   const fetchNewRoute = useCallback(async (position) => {
     const response = await fetch(
@@ -252,9 +263,9 @@ const App = () => {
     <div className="app-container">
       <div ref={mapContainer} className="map-container" />
       <div className="sidebar">
-        <h2>WayFinding Methods Game</h2>
-        <button onClick={handleStartStop}>
-          {isGameActive ? 'Stop Game' : 'Start Game'}
+        <h2>Navigation Task</h2>
+        <button onClick={handleStart} disabled={isGameActive}>
+          Start Game
         </button>
         <div className="stat">
           <strong>Time Taken:</strong> {timeTaken} seconds

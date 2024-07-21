@@ -54,7 +54,149 @@ const App = () => {
         accessToken: mapboxgl.accessToken,
         unit: 'metric',
         profile: 'mapbox/walking',
-        interactive: false
+        interactive: false,
+        styles: [
+          {
+            id: 'directions-route-line-alt',
+            type: 'line',
+            source: 'directions',
+            layout: {
+              'line-cap': 'round',
+              'line-join': 'round'
+            },
+            paint: {
+              'line-color': '#3bb2d0',
+              'line-width': 0  // Set width to 0 to make it invisible
+            },
+            filter: ['all', ['in', '$type', 'LineString'],
+              ['in', 'route', 'alternate']]
+          },
+          {
+            id: 'directions-route-line-casing',
+            type: 'line',
+            source: 'directions',
+            layout: {
+              'line-cap': 'round',
+              'line-join': 'round'
+            },
+            paint: {
+              'line-color': '#2d5f99',
+              'line-width': 0  // Set width to 0 to make it invisible
+            },
+            filter: ['all', ['in', '$type', 'LineString'],
+              ['in', 'route', 'selected']]
+          },
+          {
+            id: 'directions-route-line',
+            type: 'line',
+            source: 'directions',
+            layout: {
+              'line-cap': 'butt',
+              'line-join': 'round'
+            },
+            paint: {
+              'line-color': '#3bb2d0',
+              'line-width': 0  // Set width to 0 to make it invisible
+            },
+            filter: ['all', ['in', '$type', 'LineString'],
+              ['in', 'route', 'selected']]
+          },
+          {
+            id: 'directions-hover-point-casing',
+            type: 'circle',
+            source: 'directions',
+            paint: {
+              'circle-radius': 0,  // Set radius to 0 to make it invisible
+              'circle-color': '#fff'
+            },
+            filter: ['all', ['in', '$type', 'Point'],
+              ['in', 'id', 'hover']]
+          },
+          {
+            id: 'directions-hover-point',
+            type: 'circle',
+            source: 'directions',
+            paint: {
+              'circle-radius': 0,  // Set radius to 0 to make it invisible
+              'circle-color': '#3bb2d0'
+            },
+            filter: ['all', ['in', '$type', 'Point'],
+              ['in', 'id', 'hover']]
+          },
+          {
+            id: 'directions-waypoint-point-casing',
+            type: 'circle',
+            source: 'directions',
+            paint: {
+              'circle-radius': 0,  // Set radius to 0 to make it invisible
+              'circle-color': '#fff'
+            },
+            filter: ['all', ['in', '$type', 'Point'],
+              ['in', 'id', 'waypoint']]
+          },
+          {
+            id: 'directions-waypoint-point',
+            type: 'circle',
+            source: 'directions',
+            paint: {
+              'circle-radius': 0,  // Set radius to 0 to make it invisible
+              'circle-color': '#8a8bc9'
+            },
+            filter: ['all', ['in', '$type', 'Point'],
+              ['in', 'id', 'waypoint']]
+          },
+          {
+            id: 'directions-origin-point',
+            type: 'circle',
+            source: 'directions',
+            paint: {
+              'circle-radius': 18,
+              'circle-color': '#fffff'
+            },
+            filter: ['all', ['in', '$type', 'Point'],
+              ['in', 'marker-symbol', 'A']]
+          },
+          {
+            id: 'directions-origin-label',
+            type: 'symbol',
+            source: 'directions',
+            layout: {
+              'text-field': 'A',
+              'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+              'text-size': 12
+            },
+            paint: {
+              'text-color': '#FFFFFF'
+            },
+            filter: ['all', ['in', '$type', 'Point'],
+              ['in', 'marker-symbol', 'A']]
+          },
+          {
+            id: 'directions-destination-point',
+            type: 'circle',
+            source: 'directions',
+            paint: {
+              'circle-radius': 18,
+              'circle-color': '#fffff'
+            },
+            filter: ['all', ['in', '$type', 'Point'],
+              ['in', 'marker-symbol', 'B']]
+          },
+          {
+            id: 'directions-destination-label',
+            type: 'symbol',
+            source: 'directions',
+            layout: {
+              'text-field': 'B',
+            },
+            paint: {
+              'text-color': '#FFFFFF'
+            },
+            filter: ['all', ['in', '$type', 'Point'],
+              ['in', 'marker-symbol', 'B']]
+          }
+        ]
+        
       });
 
       map.current.addControl(directions.current, 'top-left');
@@ -68,6 +210,14 @@ const App = () => {
           speak(newSteps[0].maneuver.instruction);
         }
         createBufferLine(e.route[0].geometry.coordinates);
+
+        // Remove the route layer and source after directions are calculated
+        if (map.current.getLayer('mapbox-directions-route-line')) {
+          map.current.removeLayer('mapbox-directions-route-line');
+        }
+        if (map.current.getSource('mapbox-directions-route')) {
+          map.current.removeSource('mapbox-directions-route');
+        }
       });
     });
   }, []);
@@ -95,7 +245,7 @@ const App = () => {
       layout: {},
       paint: {
         'fill-color': '#888',
-        'fill-opacity': 0.5
+        'fill-opacity': 0 // Set to 0 to make it invisible
       }
     });
   };
@@ -156,11 +306,10 @@ const App = () => {
     map.current.scrollZoom.enable();
     map.current.keyboard.enable();
 
-    // Use a callback with setErrors to get the latest error count
     setErrors(currentErrors => {
       const finalMessage = `You have reached your destination in ${totalTime} seconds with ${currentErrors} errors.`;
       speak(finalMessage);
-      return currentErrors; // This doesn't change the error count, just returns the current value
+      return currentErrors;
     });
   }, [startTime, speak]);
 
@@ -225,13 +374,13 @@ const App = () => {
 
   const checkForErrors = useCallback((position) => {
     const now = Date.now();
-    if (now - lastErrorTime.current < 5000) return; // Prevent error spamming
+    if (now - lastErrorTime.current < 5000) return;
   
     if (bufferLine.current) {
       const point = turf.point([position.lng, position.lat]);
       const isInsideBuffer = turf.booleanPointInPolygon(point, bufferLine.current);
   
-      if (!isInsideBuffer) {  // If player is outside the buffer
+      if (!isInsideBuffer) {
         setErrors(prevErrors => prevErrors + 1);
         speak("You've deviated from the correct path. Please correct your course.");
         lastErrorTime.current = now;

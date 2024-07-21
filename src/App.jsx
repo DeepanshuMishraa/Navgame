@@ -216,7 +216,7 @@ const App = () => {
       { units: 'meters' }
     );
 
-    if (distanceToDestination < 20) {
+    if (distanceToDestination < 60) {
       endGame();
     } else {
       fetchNewRoute(position);

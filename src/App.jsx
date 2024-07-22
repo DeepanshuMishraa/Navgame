@@ -26,6 +26,27 @@ const App = () => {
   const lastInstruction = useRef('');
   const lastErrorTime = useRef(0);
   const bufferLine = useRef(null);
+  const [popupInstruction, setPopupInstruction] = useState('');
+  const [instructionType, setInstructionType] = useState('egocentric');
+  const [playerName, setPlayerName] = useState('');
+  const [playerBranch, setPlayerBranch] = useState('');
+  const [playerGender, setPlayerGender] = useState('');
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
+  const gameCompleted = useRef(false);
+
+  useEffect(() => {
+    // Load leaderboard from local storage on component mount
+    const storedLeaderboard = JSON.parse(localStorage.getItem('navigationGameLeaderboard') || '[]');
+    setLeaderboard(storedLeaderboard);
+    setShowLeaderboard(storedLeaderboard.length > 0);
+  }, []);
+  
+  useEffect(() => {
+    // Save leaderboard to local storage whenever it changes
+    localStorage.setItem('navigationGameLeaderboard', JSON.stringify(leaderboard));
+    setShowLeaderboard(leaderboard.length > 0);
+  }, [leaderboard]);
 
   useEffect(() => {
     if (map.current) return;
@@ -42,7 +63,6 @@ const App = () => {
       const el = document.createElement('div');
       el.className = 'player-marker';
 
-      // Create root and render the Navigation icon
       const root = createRoot(el);
       root.render(<Navigation2 size={20} color='blue' />);
 
@@ -55,148 +75,6 @@ const App = () => {
         unit: 'metric',
         profile: 'mapbox/walking',
         interactive: false,
-        styles: [
-          {
-            id: 'directions-route-line-alt',
-            type: 'line',
-            source: 'directions',
-            layout: {
-              'line-cap': 'round',
-              'line-join': 'round'
-            },
-            paint: {
-              'line-color': '#3bb2d0',
-              'line-width': 0  // Set width to 0 to make it invisible
-            },
-            filter: ['all', ['in', '$type', 'LineString'],
-              ['in', 'route', 'alternate']]
-          },
-          {
-            id: 'directions-route-line-casing',
-            type: 'line',
-            source: 'directions',
-            layout: {
-              'line-cap': 'round',
-              'line-join': 'round'
-            },
-            paint: {
-              'line-color': '#2d5f99',
-              'line-width': 0  // Set width to 0 to make it invisible
-            },
-            filter: ['all', ['in', '$type', 'LineString'],
-              ['in', 'route', 'selected']]
-          },
-          {
-            id: 'directions-route-line',
-            type: 'line',
-            source: 'directions',
-            layout: {
-              'line-cap': 'butt',
-              'line-join': 'round'
-            },
-            paint: {
-              'line-color': '#3bb2d0',
-              'line-width': 0  // Set width to 0 to make it invisible
-            },
-            filter: ['all', ['in', '$type', 'LineString'],
-              ['in', 'route', 'selected']]
-          },
-          {
-            id: 'directions-hover-point-casing',
-            type: 'circle',
-            source: 'directions',
-            paint: {
-              'circle-radius': 0,  // Set radius to 0 to make it invisible
-              'circle-color': '#fff'
-            },
-            filter: ['all', ['in', '$type', 'Point'],
-              ['in', 'id', 'hover']]
-          },
-          {
-            id: 'directions-hover-point',
-            type: 'circle',
-            source: 'directions',
-            paint: {
-              'circle-radius': 0,  // Set radius to 0 to make it invisible
-              'circle-color': '#3bb2d0'
-            },
-            filter: ['all', ['in', '$type', 'Point'],
-              ['in', 'id', 'hover']]
-          },
-          {
-            id: 'directions-waypoint-point-casing',
-            type: 'circle',
-            source: 'directions',
-            paint: {
-              'circle-radius': 0,  // Set radius to 0 to make it invisible
-              'circle-color': '#fff'
-            },
-            filter: ['all', ['in', '$type', 'Point'],
-              ['in', 'id', 'waypoint']]
-          },
-          {
-            id: 'directions-waypoint-point',
-            type: 'circle',
-            source: 'directions',
-            paint: {
-              'circle-radius': 0,  // Set radius to 0 to make it invisible
-              'circle-color': '#8a8bc9'
-            },
-            filter: ['all', ['in', '$type', 'Point'],
-              ['in', 'id', 'waypoint']]
-          },
-          {
-            id: 'directions-origin-point',
-            type: 'circle',
-            source: 'directions',
-            paint: {
-              'circle-radius': 18,
-              'circle-color': '#fffff'
-            },
-            filter: ['all', ['in', '$type', 'Point'],
-              ['in', 'marker-symbol', 'A']]
-          },
-          {
-            id: 'directions-origin-label',
-            type: 'symbol',
-            source: 'directions',
-            layout: {
-              'text-field': 'A',
-              'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-              'text-size': 12
-            },
-            paint: {
-              'text-color': '#FFFFFF'
-            },
-            filter: ['all', ['in', '$type', 'Point'],
-              ['in', 'marker-symbol', 'A']]
-          },
-          {
-            id: 'directions-destination-point',
-            type: 'circle',
-            source: 'directions',
-            paint: {
-              'circle-radius': 18,
-              'circle-color': '#fffff'
-            },
-            filter: ['all', ['in', '$type', 'Point'],
-              ['in', 'marker-symbol', 'B']]
-          },
-          {
-            id: 'directions-destination-label',
-            type: 'symbol',
-            source: 'directions',
-            layout: {
-              'text-field': 'B',
-            },
-            paint: {
-              'text-color': '#FFFFFF'
-            },
-            filter: ['all', ['in', '$type', 'Point'],
-              ['in', 'marker-symbol', 'B']]
-          }
-        ]
-        
       });
 
       map.current.addControl(directions.current, 'top-left');
@@ -211,7 +89,6 @@ const App = () => {
         }
         createBufferLine(e.route[0].geometry.coordinates);
 
-        // Remove the route layer and source after directions are calculated
         if (map.current.getLayer('mapbox-directions-route-line')) {
           map.current.removeLayer('mapbox-directions-route-line');
         }
@@ -229,7 +106,7 @@ const App = () => {
     }
   
     const route = turf.lineString(coordinates);
-    const buffered = turf.buffer(route, 0.06, { units: 'kilometers' }); // 0.06 km = 60 meters
+    const buffered = turf.buffer(route, 0.06, { units: 'kilometers' });
   
     bufferLine.current = buffered;
   
@@ -245,7 +122,7 @@ const App = () => {
       layout: {},
       paint: {
         'fill-color': '#888',
-        'fill-opacity': 0 // Set to 0 to make it invisible
+        'fill-opacity': 0
       }
     });
   };
@@ -264,16 +141,41 @@ const App = () => {
     return () => clearInterval(interval);
   }, [isStarted, timeTaken]);
 
+  const convertToEgocentric = (instruction) => {
+    return instruction
+      .replace(/north/gi, 'forward')
+      .replace(/south/gi, 'backward')
+      .replace(/east/gi, 'right')
+      .replace(/west/gi, 'left');
+  };
+
+  const convertToGeocentric = (instruction) => {
+    return instruction
+      .replace(/forward/gi, 'north')
+      .replace(/backward/gi, 'south')
+      .replace(/right/gi, 'east')
+      .replace(/left/gi, 'west');
+  };
+
   const speak = useCallback((text) => {
-    if (text !== lastInstruction.current) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      window.speechSynthesis.speak(utterance);
-      lastInstruction.current = text;
+    let processedText = text;
+    if (instructionType === 'egocentric') {
+      processedText = convertToEgocentric(text);
+    } else {
+      processedText = convertToGeocentric(text);
     }
-  }, []);
+
+    if (processedText !== lastInstruction.current) {
+      const utterance = new SpeechSynthesisUtterance(processedText);
+      window.speechSynthesis.speak(utterance);
+      lastInstruction.current = processedText;
+      setPopupInstruction(processedText);
+      setTimeout(() => setPopupInstruction(''), 5000);
+    }
+  }, [instructionType]);
 
   const handleStart = () => {
-    if (!isGameActive) {
+    if (!isGameActive && playerName && playerBranch && playerGender) {
       startGame();
     }
   };
@@ -291,27 +193,84 @@ const App = () => {
     map.current.keyboard.disable();
 
     setIsGameActive(true);
+    gameCompleted.current = false;
   };
 
   const endGame = useCallback(() => {
+    if (gameCompleted.current) return;
+  
     setIsStarted(false);
     const totalTime = Math.floor((Date.now() - startTime) / 1000);
-
+  
     window.speechSynthesis.cancel();
-
+  
     setTimeTaken(totalTime);
     setIsGameActive(false);
-
+  
     map.current.dragPan.enable();
     map.current.scrollZoom.enable();
     map.current.keyboard.enable();
-
+  
     setErrors(currentErrors => {
       const finalMessage = `You have reached your destination in ${totalTime} seconds with ${currentErrors} errors.`;
       speak(finalMessage);
+  
+      // Update leaderboard
+      const newEntry = {
+        name: playerName,
+        branch: playerBranch,
+        gender: playerGender,
+        time: totalTime,
+        errors: currentErrors,
+        score: totalTime + (currentErrors * 10) // Simple scoring system
+      };
+  
+      // Access the latest leaderboard state directly
+      setLeaderboard(prevLeaderboard => {
+        const existingEntryIndex = prevLeaderboard.findIndex(entry => entry.name === playerName);
+  
+        let newLeaderboard;
+        if (existingEntryIndex !== -1) {
+          // Update existing entry if it has a worse score
+          newLeaderboard = prevLeaderboard.map((entry, index) => 
+            index === existingEntryIndex && entry.score > newEntry.score ? newEntry : entry
+          );
+        } else {
+          // Add new entry
+          newLeaderboard = [...prevLeaderboard, newEntry];
+        }
+  
+        // Sort and keep all entries
+        newLeaderboard.sort((a, b) => a.score - b.score);
+  
+        // Save to localStorage
+        localStorage.setItem('navigationGameLeaderboard', JSON.stringify(newLeaderboard));
+        
+        return newLeaderboard;
+      });
+  
+      gameCompleted.current = true;
       return currentErrors;
     });
-  }, [startTime, speak]);
+  }, [startTime, speak, playerName, playerBranch, playerGender]);
+  
+  const downloadLeaderboard = () => {
+    let csv = 'Rank,Name,Branch,Gender,Time,Errors,Score\n';
+    leaderboard.forEach((player, index) => {
+      csv += `${index + 1},${player.name},${player.branch},${player.gender},${player.time},${player.errors},${player.score}\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'leaderboard.csv');
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
 
   const handleKeyPress = useCallback((e) => {
     if (!isStarted) return;
@@ -408,35 +367,107 @@ const App = () => {
     };
   }, [handleKeyPress]);
 
-  return (
+   return (
     <div className="app-container">
       <div ref={mapContainer} className="map-container" />
       <div className="sidebar">
         <h2>Navigation Task</h2>
-        <button onClick={handleStart} disabled={isGameActive}>
+        {!isGameActive && (
+          <div className="player-info">
+            <input
+              type="text"
+              placeholder="Name"
+              value={playerName}
+              onChange={(e) => setPlayerName(e.target.value)}
+            />
+            <input
+              type="text"
+              placeholder="Branch"
+              value={playerBranch}
+              onChange={(e) => setPlayerBranch(e.target.value)}
+            />
+            <select
+              value={playerGender}
+              onChange={(e) => setPlayerGender(e.target.value)}
+            >
+              <option value="">Select Gender</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        )}
+        {!isGameActive && (
+          <div className="instruction-type-selector">
+            <h3>Select Instruction Type:</h3>
+            <label>
+              <input
+                type="radio"
+                value="egocentric"
+                checked={instructionType === 'egocentric'}
+                onChange={() => setInstructionType('egocentric')}
+              />
+              Egocentric (Left/Right)
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="geocentric"
+                checked={instructionType === 'geocentric'}
+                onChange={() => setInstructionType('geocentric')}
+              />
+              Geocentric (North/South)
+            </label>
+          </div>
+        )}
+        <button onClick={handleStart} disabled={isGameActive || !playerName || !playerBranch || !playerGender}>
           Start Game
         </button>
-        <div className="stat">
-          <strong>Time Taken:</strong> {timeTaken} seconds
-        </div>
-        <div className="stat">
-          <strong>Errors:</strong> {errors}
-        </div>
-        <div className="instructions">
-          <strong>Instructions:</strong>
-          {steps.map((step, index) => (
-            <div 
-              key={step.id} 
-              className={`instruction ${step.completed ? 'completed' : ''} ${index === currentStepIndex ? 'current' : ''}`}
-            >
-              {step.maneuver.instruction}
+        {isGameActive && (
+          <>
+            <div className="stat">
+              <strong>Time Taken:</strong> {timeTaken} seconds
             </div>
-          ))}
-        </div>
-        <div className="controls">
-          <p>Use arrow keys to move the player</p>
-        </div>
+            <div className="stat">
+              <strong>Errors:</strong> {errors}
+            </div>
+            <div className="controls">
+              <p>Use arrow keys to move the player</p>
+            </div>
+          </>
+        )}
+        {!isGameActive && showLeaderboard && (
+          <div className="leaderboard">
+            <h3>Leaderboard</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Name</th>
+                  <th>Time</th>
+                  <th>Errors</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leaderboard.map((player, index) => (
+                  <tr key={index}>
+                    <td>{index + 1}</td>
+                    <td>{player.name}</td>
+                    <td>{player.time}s</td>
+                    <td>{player.errors}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <button onClick={downloadLeaderboard}>Download Leaderboard</button>
+          </div>
+        )}
       </div>
+      {popupInstruction && (
+        <div className="popup-instruction">
+          {popupInstruction}
+        </div>
+      )}
     </div>
   );
 };

@@ -10,6 +10,9 @@ import { Navigation2 } from 'lucide-react';
 
 mapboxgl.accessToken = 'pk.eyJ1IjoidGVzdHVzcnIiLCJhIjoiY2x3ejhiaHcxMDRtZzJpc2VtaXFpc3lpeCJ9.8TIx8H5Jdc8-QOtaR9fH_Q';
 
+const LEADERBOARD_KEY = 'navigationGameLeaderboard';
+
+
 const App = () => {
   const mapContainer = useRef(null);
   const map = useRef(null);
@@ -37,15 +40,13 @@ const App = () => {
 
   useEffect(() => {
     // Load leaderboard from local storage on component mount
-    const storedLeaderboard = JSON.parse(localStorage.getItem('navigationGameLeaderboard') || '[]');
+    const storedLeaderboard = JSON.parse(localStorage.getItem(LEADERBOARD_KEY) || '[]');
     setLeaderboard(storedLeaderboard);
-    setShowLeaderboard(storedLeaderboard.length > 0);
   }, []);
   
   useEffect(() => {
     // Save leaderboard to local storage whenever it changes
     localStorage.setItem('navigationGameLeaderboard', JSON.stringify(leaderboard));
-    setShowLeaderboard(leaderboard.length > 0);
   }, [leaderboard]);
 
   useEffect(() => {
@@ -195,6 +196,26 @@ const App = () => {
     setIsGameActive(true);
     gameCompleted.current = false;
   };
+  const updateLeaderboard = useCallback((newEntry) => {
+    setLeaderboard(prevLeaderboard => {
+      // Remove any existing entry for this player
+      const filteredLeaderboard = prevLeaderboard.filter(entry => entry.name !== newEntry.name);
+      
+      // Add the new entry
+      const newLeaderboard = [...filteredLeaderboard, newEntry];
+      
+      // Sort by score (lower is better)
+      newLeaderboard.sort((a, b) => a.score - b.score);
+      
+      // Keep only top 10 scores
+      const topScores = newLeaderboard.slice(0, 10);
+      
+      // Save to localStorage
+      localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(topScores));
+      
+      return topScores;
+    });
+  }, []);
 
   const endGame = useCallback(() => {
     if (gameCompleted.current) return;
@@ -225,35 +246,14 @@ const App = () => {
         score: totalTime + (currentErrors * 10) // Simple scoring system
       };
   
-      // Access the latest leaderboard state directly
-      setLeaderboard(prevLeaderboard => {
-        const existingEntryIndex = prevLeaderboard.findIndex(entry => entry.name === playerName);
-  
-        let newLeaderboard;
-        if (existingEntryIndex !== -1) {
-          // Update existing entry if it has a worse score
-          newLeaderboard = prevLeaderboard.map((entry, index) => 
-            index === existingEntryIndex && entry.score > newEntry.score ? newEntry : entry
-          );
-        } else {
-          // Add new entry
-          newLeaderboard = [...prevLeaderboard, newEntry];
-        }
-  
-        // Sort and keep all entries
-        newLeaderboard.sort((a, b) => a.score - b.score);
-  
-        // Save to localStorage
-        localStorage.setItem('navigationGameLeaderboard', JSON.stringify(newLeaderboard));
-        
-        return newLeaderboard;
-      });
+      updateLeaderboard(newEntry);
   
       gameCompleted.current = true;
       return currentErrors;
     });
-  }, [startTime, speak, playerName, playerBranch, playerGender]);
-  
+  }, [startTime, speak, playerName, playerBranch, playerGender, updateLeaderboard]);
+
+
   const downloadLeaderboard = () => {
     let csv = 'Rank,Name,Branch,Gender,Time,Errors,Score\n';
     leaderboard.forEach((player, index) => {
@@ -368,7 +368,7 @@ const App = () => {
   }, [handleKeyPress]);
 
    return (
-    <div className="app-container">
+      <div className="app-container">
       <div ref={mapContainer} className="map-container" />
       <div className="sidebar">
         <h2>Navigation Task</h2>
@@ -436,13 +436,13 @@ const App = () => {
             </div>
           </>
         )}
-        {!isGameActive && showLeaderboard && (
+        {!isGameActive && leaderboard.length > 0 && (
           <div className="leaderboard">
-            <h3>Leaderboard</h3>
+            <h3>Score</h3>
             <table>
               <thead>
                 <tr>
-                  <th>Rank</th>
+                  <th>S.No</th>
                   <th>Name</th>
                   <th>Time</th>
                   <th>Errors</th>
@@ -459,7 +459,7 @@ const App = () => {
                 ))}
               </tbody>
             </table>
-            <button onClick={downloadLeaderboard}>Download Leaderboard</button>
+            <button onClick={downloadLeaderboard}>Download Score</button>
           </div>
         )}
       </div>

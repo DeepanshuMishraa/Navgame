@@ -32,8 +32,12 @@ const App = () => {
   const [popupInstruction, setPopupInstruction] = useState('');
   const [instructionType, setInstructionType] = useState('egocentric');
   const [playerName, setPlayerName] = useState('');
-  const [playerBranch, setPlayerBranch] = useState('');
+  const [playerAge, setPlayerAge] = useState('');
   const [playerGender, setPlayerGender] = useState('');
+  const [playerResidence, setPlayerResidence] = useState('');
+  const [playerEducation, setPlayerEducation] = useState('');
+  const [playerLanguage,setPlayerLanguage]  = useState('');
+  const [mapChoice,setMapChoice] = useState('');
   const [leaderboard, setLeaderboard] = useState([]);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const gameCompleted = useRef(false);
@@ -176,7 +180,7 @@ const App = () => {
   }, [instructionType]);
 
   const handleStart = () => {
-    if (!isGameActive && playerName && playerBranch && playerGender) {
+    if (!isGameActive && playerName && playerAge && playerGender) {
       startGame();
     }
   };
@@ -239,9 +243,13 @@ const App = () => {
       // Update leaderboard
       const newEntry = {
         name: playerName,
-        branch: playerBranch,
+        age: playerAge,
         gender: playerGender,
         time: totalTime,
+        Residence: playerResidence,
+        Education: playerEducation,
+        map: mapChoice,
+        language: playerLanguage,
         errors: currentErrors,
         score: totalTime + (currentErrors * 10) // Simple scoring system
       };
@@ -251,13 +259,13 @@ const App = () => {
       gameCompleted.current = true;
       return currentErrors;
     });
-  }, [startTime, speak, playerName, playerBranch, playerGender, updateLeaderboard]);
-
+  }, [startTime, speak, playerName, playerAge, playerGender, playerEducation, playerResidence, mapChoice, playerLanguage, updateLeaderboard]);
+  
 
   const downloadLeaderboard = () => {
-    let csv = 'Rank,Name,Branch,Gender,Time,Errors,Score\n';
+    let csv = 'Rank,Name,Age,Gender,Time,Residence,Education,MapChoice,Language,Error,Score\n';
     leaderboard.forEach((player, index) => {
-      csv += `${index + 1},${player.name},${player.branch},${player.gender},${player.time},${player.errors},${player.score}\n`;
+      csv += `${index + 1},${player.name},${player.age},${player.gender},${player.time},${player.Residence},${player.Education},${player.map},${player.language},${player.errors},${player.score}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -382,9 +390,9 @@ const App = () => {
             />
             <input
               type="text"
-              placeholder="Branch"
-              value={playerBranch}
-              onChange={(e) => setPlayerBranch(e.target.value)}
+              placeholder="Age"
+              value={playerAge}
+              onChange={(e) => setPlayerAge(e.target.value)}
             />
             <select
               value={playerGender}
@@ -394,6 +402,29 @@ const App = () => {
               <option value="male">Male</option>
               <option value="female">Female</option>
               <option value="other">Other</option>
+            </select>
+
+            <select value={playerResidence} onChange={(e)=>setPlayerResidence(e.target.value)}>
+              <option value="">Select Residence</option>
+              <option value="Rural">Rural</option>
+              <option value="Urban">Urban</option>
+              <option value="Semi-Urban">Semi-Urban</option>
+            </select>
+
+            <select value={playerEducation} onChange={(e)=>setPlayerEducation(e.target.value)}>
+              <option value="">Select Education</option>
+              <option value="Graduate">Graduate</option>
+              <option value="post graduate">Post Graduate</option>
+            </select>
+            <select value={mapChoice} onChange={(e)=>setMapChoice(e.target.value)}>
+              <option value="">Do you use tech maps like google maps?</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+            <select value={playerLanguage} onChange={(e)=>setPlayerLanguage(e.target.value)}>
+              <option value="">Preffered Language</option>
+              <option value="Hindi">Hindi</option>
+              <option value="English">English</option>
             </select>
           </div>
         )}
@@ -420,7 +451,7 @@ const App = () => {
             </label>
           </div>
         )}
-        <button onClick={handleStart} disabled={isGameActive || !playerName || !playerBranch || !playerGender}>
+        <button onClick={handleStart} disabled={isGameActive || !playerName || !playerAge || !playerGender||!playerEducation||!playerResidence||!playerLanguage||!mapChoice}>
           Start Game
         </button>
         {isGameActive && (

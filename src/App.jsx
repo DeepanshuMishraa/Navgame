@@ -41,6 +41,7 @@ const App = () => {
   const [leaderboard, setLeaderboard] = useState([]);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const gameCompleted = useRef(false);
+  const [instructionMode, setInstructionMode] = useState('voice');
 
   useEffect(() => {
     // Load leaderboard from local storage on component mount
@@ -171,13 +172,17 @@ const App = () => {
     }
 
     if (processedText !== lastInstruction.current) {
-      const utterance = new SpeechSynthesisUtterance(processedText);
-      window.speechSynthesis.speak(utterance);
+      if (instructionMode === 'voice') {
+        const utterance = new SpeechSynthesisUtterance(processedText);
+        window.speechSynthesis.speak(utterance);
+      }
+      if (instructionMode === 'popup') {
+        setPopupInstruction(processedText);
+        setTimeout(() => setPopupInstruction(''), 5000);
+      }
       lastInstruction.current = processedText;
-      setPopupInstruction(processedText);
-      setTimeout(() => setPopupInstruction(''), 5000);
     }
-  }, [instructionType]);
+  }, [instructionType, instructionMode]);
 
   const handleStart = () => {
     if (!isGameActive && playerName && playerAge && playerGender) {
@@ -376,130 +381,162 @@ const App = () => {
   }, [handleKeyPress]);
 
    return (
-      <div className="app-container">
-      <div ref={mapContainer} className="map-container" />
-      <div className="sidebar">
-        <h2>Navigation Task</h2>
-        {!isGameActive && (
-          <div className="player-info">
+    <div className="app-container">
+    <div ref={mapContainer} className="map-container" />
+    <div className="sidebar">
+      <h2>Navigation Task</h2>
+      {!isGameActive && (
+        <div className="player-info">
+          <input
+            type="text"
+            placeholder="Name"
+            value={playerName}
+            onChange={(e) => setPlayerName(e.target.value)}
+          />
+          <input
+            type="text"
+            placeholder="Age"
+            value={playerAge}
+            onChange={(e) => setPlayerAge(e.target.value)}
+          />
+          <select
+            value={playerGender}
+            onChange={(e) => setPlayerGender(e.target.value)}
+          >
+            <option value="">Select Gender</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+            <option value="other">Other</option>
+          </select>
+          <select 
+            value={playerResidence} 
+            onChange={(e) => setPlayerResidence(e.target.value)}
+          >
+            <option value="">Select Residence</option>
+            <option value="Rural">Rural</option>
+            <option value="Urban">Urban</option>
+            <option value="Semi-Urban">Semi-Urban</option>
+          </select>
+          <select 
+            value={playerEducation} 
+            onChange={(e) => setPlayerEducation(e.target.value)}
+          >
+            <option value="">Select Education</option>
+            <option value="Graduate">Graduate</option>
+            <option value="post graduate">Post Graduate</option>
+          </select>
+          <select 
+            value={mapChoice} 
+            onChange={(e) => setMapChoice(e.target.value)}
+          >
+            <option value="">Do you use tech maps like google maps?</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+          <select 
+            value={playerLanguage} 
+            onChange={(e) => setPlayerLanguage(e.target.value)}
+          >
+            <option value="">Preferred Language</option>
+            <option value="Hindi">Hindi</option>
+            <option value="English">English</option>
+          </select>
+        </div>
+      )}
+      {!isGameActive && (
+        <div className="instruction-options">
+          <h3>Select Instruction Type:</h3>
+          <label>
             <input
-              type="text"
-              placeholder="Name"
-              value={playerName}
-              onChange={(e) => setPlayerName(e.target.value)}
+              type="radio"
+              value="egocentric"
+              checked={instructionType === 'egocentric'}
+              onChange={() => setInstructionType('egocentric')}
             />
+            Egocentric (Left/Right)
+          </label>
+          <label>
             <input
-              type="text"
-              placeholder="Age"
-              value={playerAge}
-              onChange={(e) => setPlayerAge(e.target.value)}
+              type="radio"
+              value="geocentric"
+              checked={instructionType === 'geocentric'}
+              onChange={() => setInstructionType('geocentric')}
             />
-            <select
-              value={playerGender}
-              onChange={(e) => setPlayerGender(e.target.value)}
-            >
-              <option value="">Select Gender</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-              <option value="other">Other</option>
-            </select>
-
-            <select value={playerResidence} onChange={(e)=>setPlayerResidence(e.target.value)}>
-              <option value="">Select Residence</option>
-              <option value="Rural">Rural</option>
-              <option value="Urban">Urban</option>
-              <option value="Semi-Urban">Semi-Urban</option>
-            </select>
-
-            <select value={playerEducation} onChange={(e)=>setPlayerEducation(e.target.value)}>
-              <option value="">Select Education</option>
-              <option value="Graduate">Graduate</option>
-              <option value="post graduate">Post Graduate</option>
-            </select>
-            <select value={mapChoice} onChange={(e)=>setMapChoice(e.target.value)}>
-              <option value="">Do you use tech maps like google maps?</option>
-              <option value="yes">Yes</option>
-              <option value="no">No</option>
-            </select>
-            <select value={playerLanguage} onChange={(e)=>setPlayerLanguage(e.target.value)}>
-              <option value="">Preffered Language</option>
-              <option value="Hindi">Hindi</option>
-              <option value="English">English</option>
-            </select>
+            Geocentric (North/South)
+          </label>
+          <h3>Select Instruction Mode:</h3>
+          <label>
+            <input
+              type="radio"
+              value="voice"
+              checked={instructionMode === 'voice'}
+              onChange={() => setInstructionMode('voice')}
+            />
+            Voice
+          </label>
+          <label>
+            <input
+              type="radio"
+              value="popup"
+              checked={instructionMode === 'popup'}
+              onChange={() => setInstructionMode('popup')}
+            />
+            Popup
+          </label>
+        </div>
+      )}
+      <button 
+        onClick={handleStart} 
+        disabled={isGameActive || !playerName || !playerAge || !playerGender || !playerEducation || !playerResidence || !playerLanguage || !mapChoice}
+      >
+        Start Game
+      </button>
+      {isGameActive && (
+        <>
+          <div className="stat">
+            <strong>Time Taken:</strong> {timeTaken} seconds
           </div>
-        )}
-        {!isGameActive && (
-          <div className="instruction-type-selector">
-            <h3>Select Instruction Type:</h3>
-            <label>
-              <input
-                type="radio"
-                value="egocentric"
-                checked={instructionType === 'egocentric'}
-                onChange={() => setInstructionType('egocentric')}
-              />
-              Egocentric (Left/Right)
-            </label>
-            <label>
-              <input
-                type="radio"
-                value="geocentric"
-                checked={instructionType === 'geocentric'}
-                onChange={() => setInstructionType('geocentric')}
-              />
-              Geocentric (North/South)
-            </label>
+          <div className="stat">
+            <strong>Errors:</strong> {errors}
           </div>
-        )}
-        <button onClick={handleStart} disabled={isGameActive || !playerName || !playerAge || !playerGender||!playerEducation||!playerResidence||!playerLanguage||!mapChoice}>
-          Start Game
-        </button>
-        {isGameActive && (
-          <>
-            <div className="stat">
-              <strong>Time Taken:</strong> {timeTaken} seconds
-            </div>
-            <div className="stat">
-              <strong>Errors:</strong> {errors}
-            </div>
-            <div className="controls">
-              <p>Use arrow keys to move the player</p>
-            </div>
-          </>
-        )}
-        {!isGameActive && leaderboard.length > 0 && (
-          <div className="leaderboard">
-            <h3>Score</h3>
-            <table>
-              <thead>
-                <tr>
-                  <th>S.No</th>
-                  <th>Name</th>
-                  <th>Time</th>
-                  <th>Errors</th>
+          <div className="controls">
+            <p>Use arrow keys to move the player</p>
+          </div>
+        </>
+      )}
+      {!isGameActive && leaderboard.length > 0 && (
+        <div className="leaderboard">
+          <h3>Score</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>S.No</th>
+                <th>Name</th>
+                <th>Time</th>
+                <th>Errors</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leaderboard.map((player, index) => (
+                <tr key={index}>
+                  <td>{index + 1}</td>
+                  <td>{player.name}</td>
+                  <td>{player.time}s</td>
+                  <td>{player.errors}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {leaderboard.map((player, index) => (
-                  <tr key={index}>
-                    <td>{index + 1}</td>
-                    <td>{player.name}</td>
-                    <td>{player.time}s</td>
-                    <td>{player.errors}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <button onClick={downloadLeaderboard}>Download Score</button>
-          </div>
-        )}
-      </div>
-      {popupInstruction && (
-        <div className="popup-instruction">
-          {popupInstruction}
+              ))}
+            </tbody>
+          </table>
+          <button onClick={downloadLeaderboard}>Download Score</button>
         </div>
       )}
     </div>
+    {instructionMode === 'popup' && popupInstruction && (
+      <div className="popup-instruction">
+        {popupInstruction}
+      </div>
+    )}
+  </div>
   );
 };
 

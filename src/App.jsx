@@ -81,6 +81,108 @@ const App = () => {
         unit: 'metric',
         profile: 'mapbox/walking',
         interactive: false,
+        styles: [
+          {
+            id: 'directions-route-line-alt',
+            type: 'line',
+            source: 'directions',
+            layout: {
+              'line-cap': 'round',
+              'line-join': 'round'
+            },
+            paint: {
+              'line-color': '#3bb2d0',
+              'line-width': 0  // Set width to 0 to make it invisible
+            },
+            filter: ['all', ['in', '$type', 'LineString'],
+              ['in', 'route', 'alternate']]
+          },
+          {
+            id: 'directions-route-line-casing',
+            type: 'line',
+            source: 'directions',
+            layout: {
+              'line-cap': 'round',
+              'line-join': 'round'
+            },
+            paint: {
+              'line-color': '#2d5f99',
+              'line-width': 0  // Set width to 0 to make it invisible
+            },
+            filter: ['all', ['in', '$type', 'LineString'],
+              ['in', 'route', 'selected']]
+          },
+          {
+            id: 'directions-route-line',
+            type: 'line',
+            source: 'directions',
+            layout: {
+              'line-cap': 'butt',
+              'line-join': 'round'
+            },
+            paint: {
+              'line-color': '#3bb2d0',
+              'line-width': 0  // Set width to 0 to make it invisible
+            },
+            filter: ['all', ['in', '$type', 'LineString'],
+              ['in', 'route', 'selected']]
+          },
+          {
+            id: 'directions-hover-point-casing',
+            type: 'circle',
+            source: 'directions',
+            paint: {
+              'circle-radius': 0,  // Set radius to 0 to make it invisible
+              'circle-color': '#fff'
+            },
+            filter: ['all', ['in', '$type', 'Point'],
+              ['in', 'id', 'hover']]
+          },
+          {
+            id: 'directions-hover-point',
+            type: 'circle',
+            source: 'directions',
+            paint: {
+              'circle-radius': 0,  // Set radius to 0 to make it invisible
+              'circle-color': '#3bb2d0'
+            },
+            filter: ['all', ['in', '$type', 'Point'],
+              ['in', 'id', 'hover']]
+          },
+          {
+            id: 'directions-waypoint-point-casing',
+            type: 'circle',
+            source: 'directions',
+            paint: {
+              'circle-radius': 0,  // Set radius to 0 to make it invisible
+              'circle-color': '#fff'
+            },
+            filter: ['all', ['in', '$type', 'Point'],
+              ['in', 'id', 'waypoint']]
+          },
+          {
+            id: 'directions-waypoint-point',
+            type: 'circle',
+            source: 'directions',
+            paint: {
+              'circle-radius': 0,  // Set radius to 0 to make it invisible
+              'circle-color': '#8a8bc9'
+            },
+            filter: ['all', ['in', '$type', 'Point'],
+              ['in', 'id', 'waypoint']]
+          },
+          {
+            id: 'directions-origin-point',
+            type: 'circle',
+            source: 'directions',
+            paint: {
+              'circle-radius': 18,
+              'circle-color': '#fffff'
+            },
+            filter: ['all', ['in', '$type', 'Point'],
+              ['in', 'marker-symbol', 'A']]
+          },
+        ]
       });
 
       map.current.addControl(directions.current, 'top-left');

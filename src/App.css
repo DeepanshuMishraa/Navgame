@@ -28,6 +28,12 @@
 .stat {
   margin-bottom: 10px;
 }
+.mapboxgl-ctrl-directions {
+            display: none !important;
+          }
+          .mapbox-directions-route-shield {
+            display: none !important;
+          }
 
 .controls {
   margin-top: 20px;

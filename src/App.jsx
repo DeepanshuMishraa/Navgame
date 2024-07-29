@@ -12,7 +12,6 @@ mapboxgl.accessToken = 'pk.eyJ1IjoidGVzdHVzcnIiLCJhIjoiY2x3ejhiaHcxMDRtZzJpc2Vta
 
 const LEADERBOARD_KEY = 'navigationGameLeaderboard';
 
-
 const App = () => {
   const mapContainer = useRef(null);
   const map = useRef(null);
@@ -36,21 +35,21 @@ const App = () => {
   const [playerGender, setPlayerGender] = useState('');
   const [playerResidence, setPlayerResidence] = useState('');
   const [playerEducation, setPlayerEducation] = useState('');
-  const [playerLanguage,setPlayerLanguage]  = useState('');
+  const [playerLanguage,setPlayerLanguage] = useState('');
   const [mapChoice,setMapChoice] = useState('');
   const [leaderboard, setLeaderboard] = useState([]);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const gameCompleted = useRef(false);
   const [instructionMode, setInstructionMode] = useState('voice');
+  const lastPosition = useRef(null);
+  const lastInstructionTime = useRef(0);
 
   useEffect(() => {
-    // Load leaderboard from local storage on component mount
     const storedLeaderboard = JSON.parse(localStorage.getItem(LEADERBOARD_KEY) || '[]');
     setLeaderboard(storedLeaderboard);
   }, []);
   
   useEffect(() => {
-    // Save leaderboard to local storage whenever it changes
     localStorage.setItem('navigationGameLeaderboard', JSON.stringify(leaderboard));
   }, [leaderboard]);
 
@@ -92,7 +91,7 @@ const App = () => {
             },
             paint: {
               'line-color': '#3bb2d0',
-              'line-width': 0  // Set width to 0 to make it invisible
+              'line-width': 0
             },
             filter: ['all', ['in', '$type', 'LineString'],
               ['in', 'route', 'alternate']]
@@ -107,7 +106,7 @@ const App = () => {
             },
             paint: {
               'line-color': '#2d5f99',
-              'line-width': 0  // Set width to 0 to make it invisible
+              'line-width': 0
             },
             filter: ['all', ['in', '$type', 'LineString'],
               ['in', 'route', 'selected']]
@@ -122,7 +121,7 @@ const App = () => {
             },
             paint: {
               'line-color': '#3bb2d0',
-              'line-width': 0  // Set width to 0 to make it invisible
+              'line-width': 0
             },
             filter: ['all', ['in', '$type', 'LineString'],
               ['in', 'route', 'selected']]
@@ -132,7 +131,7 @@ const App = () => {
             type: 'circle',
             source: 'directions',
             paint: {
-              'circle-radius': 0,  // Set radius to 0 to make it invisible
+              'circle-radius': 0,
               'circle-color': '#fff'
             },
             filter: ['all', ['in', '$type', 'Point'],
@@ -143,7 +142,7 @@ const App = () => {
             type: 'circle',
             source: 'directions',
             paint: {
-              'circle-radius': 0,  // Set radius to 0 to make it invisible
+              'circle-radius': 0,
               'circle-color': '#3bb2d0'
             },
             filter: ['all', ['in', '$type', 'Point'],
@@ -154,7 +153,7 @@ const App = () => {
             type: 'circle',
             source: 'directions',
             paint: {
-              'circle-radius': 0,  // Set radius to 0 to make it invisible
+              'circle-radius': 0,
               'circle-color': '#fff'
             },
             filter: ['all', ['in', '$type', 'Point'],
@@ -165,7 +164,7 @@ const App = () => {
             type: 'circle',
             source: 'directions',
             paint: {
-              'circle-radius': 0,  // Set radius to 0 to make it invisible
+              'circle-radius': 0,
               'circle-color': '#8a8bc9'
             },
             filter: ['all', ['in', '$type', 'Point'],
@@ -192,9 +191,9 @@ const App = () => {
       directions.current.on('route', (e) => {
         const newSteps = e.route[0].legs[0].steps;
         setSteps(newSteps.map((step, index) => ({ ...step, completed: false, id: index })));
-        if (newSteps.length > 0) {
-          speak(newSteps[0].maneuver.instruction);
-        }
+        // if (newSteps.length > 0) {
+        //   speak(newSteps[0].maneuver.instruction);
+        // }
         createBufferLine(e.route[0].geometry.coordinates);
 
         if (map.current.getLayer('mapbox-directions-route-line')) {
@@ -307,23 +306,14 @@ const App = () => {
     setIsGameActive(true);
     gameCompleted.current = false;
   };
+
   const updateLeaderboard = useCallback((newEntry) => {
     setLeaderboard(prevLeaderboard => {
-      // Remove any existing entry for this player
       const filteredLeaderboard = prevLeaderboard.filter(entry => entry.name !== newEntry.name);
-      
-      // Add the new entry
       const newLeaderboard = [...filteredLeaderboard, newEntry];
-      
-      // Sort by score (lower is better)
       newLeaderboard.sort((a, b) => a.score - b.score);
-      
-      // Keep only top 10 scores
       const topScores = newLeaderboard.slice(0, 10);
-      
-      // Save to localStorage
       localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(topScores));
-      
       return topScores;
     });
   }, []);
@@ -345,9 +335,9 @@ const App = () => {
   
     setErrors(currentErrors => {
       const finalMessage = `You have reached your destination in ${totalTime} seconds with ${currentErrors} errors.`;
-      speak(finalMessage);
+      const utterance = new SpeechSynthesisUtterance(finalMessage);
+      window.speechSynthesis.speak(utterance);
   
-      // Update leaderboard
       const newEntry = {
         name: playerName,
         age: playerAge,
@@ -358,7 +348,7 @@ const App = () => {
         map: mapChoice,
         language: playerLanguage,
         errors: currentErrors,
-        score: totalTime + (currentErrors * 10) // Simple scoring system
+        score: totalTime + (currentErrors * 10)
       };
   
       updateLeaderboard(newEntry);
@@ -366,8 +356,7 @@ const App = () => {
       gameCompleted.current = true;
       return currentErrors;
     });
-  }, [startTime, speak, playerName, playerAge, playerGender, playerEducation, playerResidence, mapChoice, playerLanguage, updateLeaderboard]);
-  
+  }, [startTime,  playerName, playerAge, playerGender, playerEducation, playerResidence, mapChoice, playerLanguage, updateLeaderboard]);
 
   const downloadLeaderboard = () => {
     let csv = 'Rank,Name,Age,Gender,Time,Residence,Education,MapChoice,Language,Error,Score\n';
@@ -404,11 +393,17 @@ const App = () => {
     }
 
     const newPosition = { lng: newLng, lat: newLat };
-    playerMarker.current.setLngLat(newPosition);
-    map.current.setCenter(newPosition);
+    
+    // Only update if the position has changed
+    if (newPosition.lng !== lastPosition.current?.lng || newPosition.lat !== lastPosition.current?.lat) {
+      playerMarker.current.setLngLat(newPosition);
+      map.current.setCenter(newPosition);
 
-    checkStepCompletion(newPosition);
-    checkForErrors(newPosition);
+      checkStepCompletion(newPosition);
+      checkForErrors(newPosition);
+      
+      lastPosition.current = newPosition;
+    }
   }, [isStarted]);
 
   const checkStepCompletion = useCallback((position) => {
@@ -428,8 +423,14 @@ const App = () => {
         index === currentStepIndex ? { ...step, completed: true } : step
       ));
       setCurrentStepIndex(prevIndex => prevIndex + 1);
+      
+      // Provide immediate instruction for the next step
       if (currentStepIndex + 1 < steps.length) {
-        speak(steps[currentStepIndex + 1].maneuver.instruction);
+        const now = Date.now();
+        if (now - lastInstructionTime.current > 2000) { // Prevent instructions too close together
+          speak(steps[currentStepIndex + 1].maneuver.instruction);
+          lastInstructionTime.current = now;
+        }
       }
     }
 
@@ -469,8 +470,14 @@ const App = () => {
     const data = await response.json();
     const newSteps = data.routes[0].legs[0].steps;
     setSteps(newSteps.map((step, index) => ({ ...step, completed: false, id: index })));
+    
+    // Provide immediate instruction for the first step of the new route
     if (newSteps.length > 0 && newSteps[0].maneuver.instruction !== lastInstruction.current) {
-      speak(newSteps[0].maneuver.instruction);
+      const now = Date.now();
+      if (now - lastInstructionTime.current > 2000) { // Prevent instructions too close together
+        speak(newSteps[0].maneuver.instruction);
+        lastInstructionTime.current = now;
+      }
     }
     createBufferLine(data.routes[0].geometry.coordinates);
   }, [speak]);
@@ -484,161 +491,161 @@ const App = () => {
 
    return (
     <div className="app-container">
-    <div ref={mapContainer} className="map-container" />
-    <div className="sidebar">
-      <h2>Navigation Task</h2>
-      {!isGameActive && (
-        <div className="player-info">
-          <input
-            type="text"
-            placeholder="Name"
-            value={playerName}
-            onChange={(e) => setPlayerName(e.target.value)}
-          />
-          <input
-            type="text"
-            placeholder="Age"
-            value={playerAge}
-            onChange={(e) => setPlayerAge(e.target.value)}
-          />
-          <select
-            value={playerGender}
-            onChange={(e) => setPlayerGender(e.target.value)}
-          >
-            <option value="">Select Gender</option>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-            <option value="other">Other</option>
-          </select>
-          <select 
-            value={playerResidence} 
-            onChange={(e) => setPlayerResidence(e.target.value)}
-          >
-            <option value="">Select Residence</option>
-            <option value="Rural">Rural</option>
-            <option value="Urban">Urban</option>
-            <option value="Semi-Urban">Semi-Urban</option>
-          </select>
-          <select 
-            value={playerEducation} 
-            onChange={(e) => setPlayerEducation(e.target.value)}
-          >
-            <option value="">Select Education</option>
-            <option value="Graduate">Graduate</option>
-            <option value="post graduate">Post Graduate</option>
-          </select>
-          <select 
-            value={mapChoice} 
-            onChange={(e) => setMapChoice(e.target.value)}
-          >
-            <option value="">Do you use tech maps like google maps?</option>
-            <option value="yes">Yes</option>
-            <option value="no">No</option>
-          </select>
-          <select 
-            value={playerLanguage} 
-            onChange={(e) => setPlayerLanguage(e.target.value)}
-          >
-            <option value="">Preferred Language</option>
-            <option value="Hindi">Hindi</option>
-            <option value="English">English</option>
-          </select>
-        </div>
-      )}
-      {!isGameActive && (
-        <div className="instruction-options">
-          <h3>Select Instruction Type:</h3>
-          <label>
+      <div ref={mapContainer} className="map-container" />
+      <div className="sidebar">
+        <h2>Navigation Task</h2>
+        {!isGameActive && (
+          <div className="player-info">
             <input
-              type="radio"
-              value="egocentric"
-              checked={instructionType === 'egocentric'}
-              onChange={() => setInstructionType('egocentric')}
+              type="text"
+              placeholder="Name"
+              value={playerName}
+              onChange={(e) => setPlayerName(e.target.value)}
             />
-            Egocentric (Left/Right)
-          </label>
-          <label>
             <input
-              type="radio"
-              value="geocentric"
-              checked={instructionType === 'geocentric'}
-              onChange={() => setInstructionType('geocentric')}
+              type="text"
+              placeholder="Age"
+              value={playerAge}
+              onChange={(e) => setPlayerAge(e.target.value)}
             />
-            Geocentric (North/South)
-          </label>
-          <h3>Select Instruction Mode:</h3>
-          <label>
-            <input
-              type="radio"
-              value="voice"
-              checked={instructionMode === 'voice'}
-              onChange={() => setInstructionMode('voice')}
-            />
-            Voice
-          </label>
-          <label>
-            <input
-              type="radio"
-              value="popup"
-              checked={instructionMode === 'popup'}
-              onChange={() => setInstructionMode('popup')}
-            />
-            Popup
-          </label>
-        </div>
-      )}
-      <button 
-        onClick={handleStart} 
-        disabled={isGameActive || !playerName || !playerAge || !playerGender || !playerEducation || !playerResidence || !playerLanguage || !mapChoice}
-      >
-        Start Game
-      </button>
-      {isGameActive && (
-        <>
-          <div className="stat">
-            <strong>Time Taken:</strong> {timeTaken} seconds
+            <select
+              value={playerGender}
+              onChange={(e) => setPlayerGender(e.target.value)}
+            >
+              <option value="">Select Gender</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+            </select>
+            <select 
+              value={playerResidence} 
+              onChange={(e) => setPlayerResidence(e.target.value)}
+            >
+              <option value="">Select Residence</option>
+              <option value="Rural">Rural</option>
+              <option value="Urban">Urban</option>
+              <option value="Semi-Urban">Semi-Urban</option>
+            </select>
+            <select 
+              value={playerEducation} 
+              onChange={(e) => setPlayerEducation(e.target.value)}
+            >
+              <option value="">Select Education</option>
+              <option value="Graduate">Graduate</option>
+              <option value="post graduate">Post Graduate</option>
+            </select>
+            <select 
+              value={mapChoice} 
+              onChange={(e) => setMapChoice(e.target.value)}
+            >
+              <option value="">Do you use tech maps like google maps?</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+            <select 
+              value={playerLanguage} 
+              onChange={(e) => setPlayerLanguage(e.target.value)}
+            >
+              <option value="">Preferred Language</option>
+              <option value="Hindi">Hindi</option>
+              <option value="English">English</option>
+            </select>
           </div>
-          <div className="stat">
-            <strong>Errors:</strong> {errors}
+        )}
+        {!isGameActive && (
+          <div className="instruction-options">
+            <h3>Select Instruction Type:</h3>
+            <label>
+              <input
+                type="radio"
+                value="egocentric"
+                checked={instructionType === 'egocentric'}
+                onChange={() => setInstructionType('egocentric')}
+              />
+              Egocentric (Left/Right)
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="geocentric"
+                checked={instructionType === 'geocentric'}
+                onChange={() => setInstructionType('geocentric')}
+              />
+              Geocentric (North/South)
+            </label>
+            <h3>Select Instruction Mode:</h3>
+            <label>
+              <input
+                type="radio"
+                value="voice"
+                checked={instructionMode === 'voice'}
+                onChange={() => setInstructionMode('voice')}
+              />
+              Voice
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="popup"
+                checked={instructionMode === 'popup'}
+                onChange={() => setInstructionMode('popup')}
+              />
+              Popup
+            </label>
           </div>
-          <div className="controls">
-            <p>Use arrow keys to move the player</p>
-          </div>
-        </>
-      )}
-      {!isGameActive && leaderboard.length > 0 && (
-        <div className="leaderboard">
-          <h3>Score</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>S.No</th>
-                <th>Name</th>
-                <th>Time</th>
-                <th>Errors</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leaderboard.map((player, index) => (
-                <tr key={index}>
-                  <td>{index + 1}</td>
-                  <td>{player.name}</td>
-                  <td>{player.time}s</td>
-                  <td>{player.errors}</td>
+        )}
+        <button 
+          onClick={handleStart} 
+          disabled={isGameActive || !playerName || !playerAge || !playerGender || !playerEducation || !playerResidence || !playerLanguage || !mapChoice}
+        >
+          Start Game
+        </button>
+        {isGameActive && (
+          <>
+            <div className="stat">
+              <strong>Time Taken:</strong> {timeTaken} seconds
+            </div>
+            <div className="stat">
+              <strong>Errors:</strong> {errors}
+            </div>
+            <div className="controls">
+              <p>Use arrow keys to move the player</p>
+            </div>
+          </>
+        )}
+        {!isGameActive && leaderboard.length > 0 && (
+          <div className="leaderboard">
+            <h3>Score</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>S.No</th>
+                  <th>Name</th>
+                  <th>Time</th>
+                  <th>Errors</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <button onClick={downloadLeaderboard}>Download Score</button>
+              </thead>
+              <tbody>
+                {leaderboard.map((player, index) => (
+                  <tr key={index}>
+                    <td>{index + 1}</td>
+                    <td>{player.name}</td>
+                    <td>{player.time}s</td>
+                    <td>{player.errors}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <button onClick={downloadLeaderboard}>Download Score</button>
+          </div>
+        )}
+      </div>
+      {instructionMode === 'popup' && popupInstruction && (
+        <div className="popup-instruction">
+          {popupInstruction}
         </div>
       )}
     </div>
-    {instructionMode === 'popup' && popupInstruction && (
-      <div className="popup-instruction">
-        {popupInstruction}
-      </div>
-    )}
-  </div>
   );
 };
 

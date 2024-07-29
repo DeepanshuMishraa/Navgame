@@ -17,6 +17,11 @@ const Instruction = () => {
         <li>Deviating from the correct path will result in errors.</li>
         <li>Try to reach the destination with minimal errors and in the shortest time possible.</li>
       </ul>
+      {/* checkbox */}
+      <div className='flex items-center justify-center'>
+        <h8 className="p-4">I have read all the instructions and ready to proceed the game</h8>
+      <input type="checkbox" id="instruction" name="instruction" required />
+      </div>
       <button onClick={handleProceed}>Proceed to Game</button>
     </div>
   );

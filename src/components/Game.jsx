@@ -28,10 +28,9 @@ const Game = ({ gameSettings, setGameResult }) => {
   const bufferLine = useRef(null);
   const [popupInstruction, setPopupInstruction] = useState('');
   const lastPosition = useRef(null);
+  const lastInstructionTime = useRef(0);
   const destinationRadius = 50; // meters
   const destinationCircle = useRef(null);
-  const isMoving = useRef(false);
-  const lastMoveTime = useRef(0);
 
   const { instructionType, instructionMode } = gameSettings;
 
@@ -246,9 +245,15 @@ const Game = ({ gameSettings, setGameResult }) => {
       setCurrentStepIndex(prevIndex => prevIndex + 1);
       
       if (currentStepIndex + 1 < steps.length) {
-        speak(steps[currentStepIndex + 1].maneuver.instruction);
+        const now = Date.now();
+        if (now - lastInstructionTime.current > 2000) {
+          speak(steps[currentStepIndex + 1].maneuver.instruction);
+          lastInstructionTime.current = now;
+        }
       }
     }
+
+    fetchNewRoute(position);
   }, [currentStepIndex, steps, speak]);
 
   const checkForErrors = useCallback((position) => {
@@ -275,8 +280,12 @@ const Game = ({ gameSettings, setGameResult }) => {
     const newSteps = data.routes[0].legs[0].steps;
     setSteps(newSteps.map((step, index) => ({ ...step, completed: false, id: index })));
     
-    if (newSteps.length > 0 && isMoving.current) {
-      speak(newSteps[0].maneuver.instruction);
+    if (newSteps.length > 0 && newSteps[0].maneuver.instruction !== lastInstruction.current) {
+      const now = Date.now();
+      if (now - lastInstructionTime.current > 2000) {
+        speak(newSteps[0].maneuver.instruction);
+        lastInstructionTime.current = now;
+      }
     }
     createBufferLine(data.routes[0].geometry.coordinates);
   }, [speak]);
@@ -303,13 +312,6 @@ const Game = ({ gameSettings, setGameResult }) => {
       playerMarker.current.setLngLat(newPosition);
       map.current.setCenter(newPosition);
 
-      const now = Date.now();
-      if (!isMoving.current) {
-        isMoving.current = true;
-        fetchNewRoute(newPosition);
-      }
-      lastMoveTime.current = now;
-
       checkDestinationReached(newPosition);
       if (isStarted) {  // Only continue if the game hasn't ended
         checkStepCompletion(newPosition);
@@ -318,19 +320,12 @@ const Game = ({ gameSettings, setGameResult }) => {
       
       lastPosition.current = newPosition;
     }
-  }, [isStarted, checkStepCompletion, checkForErrors, checkDestinationReached, fetchNewRoute]);
+  }, [isStarted, checkStepCompletion, checkForErrors, checkDestinationReached]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyPress);
-    const checkMovement = setInterval(() => {
-      const now = Date.now();
-      if (now - lastMoveTime.current > 1000) {
-        isMoving.current = false;
-      }
-    }, 1000);
     return () => {
       window.removeEventListener('keydown', handleKeyPress);
-      clearInterval(checkMovement);
     };
   }, [handleKeyPress]);
 

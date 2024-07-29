@@ -1,43 +1,93 @@
-.app-container {
-  display: flex;
-  height: 100vh;
-  position: relative;
-}
-
-.map-container {
-  flex: 1;
-}
-
-.sidebar {
-  width: 300px;
-  padding: 20px;
+/* General Styles */
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
   background-color: #f0f0f0;
-  overflow-y: auto;
 }
 
-.sidebar h2 {
-  margin-top: 0;
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
 }
 
-.sidebar button {
-  width: 100%;
-  padding: 10px;
+h1, h2, h3 {
+  color: #333;
+}
+
+button {
+  background-color: #4CAF50;
+  border: none;
+  color: white;
+  padding: 15px 32px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 16px;
+  margin: 4px 2px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+button:hover {
+  background-color: #45a049;
+}
+
+button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+/* Welcome Component Styles */
+.welcome-container {
+  text-align: center;
+  padding: 20px;
+}
+
+.player-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   margin-bottom: 20px;
 }
 
-.stat {
-  margin-bottom: 10px;
+.player-info input,
+.player-info select {
+  margin: 10px 0;
+  padding: 10px;
+  width: 300px;
+  font-size: 16px;
 }
-.mapboxgl-ctrl-directions {
-            display: none !important;
-          }
-          .mapbox-directions-route-shield {
-            display: none !important;
-          }
 
-.controls {
-  margin-top: 20px;
-  font-style: italic;
+/* Instructions Component Styles */
+.instructions-container {
+  text-align: center;
+  padding: 20px;
+}
+
+.instruction-options {
+  margin: 20px 0;
+}
+
+.instruction-options label {
+  display: block;
+  margin: 10px 0;
+}
+
+/* Game Component Styles */
+.game-container {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+}
+
+.map-container {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
 }
 
 .popup-instruction {
@@ -49,40 +99,25 @@
   color: white;
   padding: 10px 20px;
   border-radius: 5px;
-  font-size: 18px;
   z-index: 1000;
 }
 
-.instruction-type-selector {
-  margin-bottom: 20px;
+.player-marker {
+  background-color: blue;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
 }
 
-.instruction-type-selector h3 {
-  margin-bottom: 10px;
-}
-
-.instruction-type-selector label {
-  display: block;
-  margin-bottom: 5px;
-}
-
-.instruction-type-selector input[type="radio"] {
-  margin-right: 5px;
-}
-
-.player-info {
-  margin-bottom: 20px;
-}
-
-.player-info input,
-.player-info select {
-  width: 100%;
-  padding: 5px;
-  margin-bottom: 10px;
+/* Result Component Styles */
+.result-container {
+  text-align: center;
+  padding: 20px;
 }
 
 .leaderboard {
-  margin-top: 20px;
+  margin: 20px 0;
 }
 
 .leaderboard table {
@@ -98,9 +133,30 @@
 }
 
 .leaderboard th {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.leaderboard tr:nth-child(even) {
   background-color: #f2f2f2;
 }
 
-.leaderboard button {
-  margin-top: 10px;
+.leaderboard tr:hover {
+  background-color: #ddd;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .container {
+    padding: 10px;
+  }
+
+  .player-info input,
+  .player-info select {
+    width: 100%;
+  }
+
+  .leaderboard table {
+    font-size: 14px;
+  }
 }

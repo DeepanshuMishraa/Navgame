@@ -19,8 +19,8 @@ const Instruction = () => {
       </ul>
       {/* checkbox */}
       <div className='flex items-center justify-center'>
-        <h8 className="p-4">I have read all the instructions and ready to proceed the game</h8>
       <input type="checkbox" id="instruction" name="instruction" required />
+        <h8 className="p-4">I have read all the instructions and ready to proceed the game</h8>
       </div>
       <button onClick={handleProceed}>Proceed to Game</button>
     </div>

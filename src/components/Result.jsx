@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 
 const LEADERBOARD_KEY = 'navigationGameLeaderboard';
 
@@ -103,6 +104,19 @@ const Result = ({ gameSettings, gameResult }) => {
           </tbody>
         </table>
         <button onClick={downloadLeaderboard}>Download Leaderboard</button>
+        <Link to="/" style={{
+  backgroundColor: '#4CAF50',
+  border: 'none',
+  color: 'white',
+  padding: '15px 32px',
+  textAlign: 'center',
+  textDecoration: 'none',
+  display: 'inline-block',
+  fontSize: '16px',
+  margin: '4px 2px',
+  cursor: 'pointer',
+  transition: 'background-color 0.3s'
+}}>Enter a new Player</Link>
       </div>
     </div>
   );

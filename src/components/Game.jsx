@@ -61,6 +61,10 @@ const Game = ({ gameSettings, setGameResult }) => {
         unit: 'metric',
         profile: 'mapbox/walking',
         interactive: false,
+        controls:{
+          inputs:false,
+          instructions:false
+        }
       });
 
       map.current.addControl(directions.current, 'top-left');
